@@ -3,7 +3,7 @@
   "version": "1.70.2-master",
   "description": "Base for nodes",
   "main": "./dist/index.js",
-  "repository": "github.com:vicjicaman/core-render-stateful-server.git",
+  "repository": "github.com:vicjicaman/repoflow-plugin-service.git",
   "author": "Victor Jimenez <vic@repoflow.com>",
   "license": "Apache-2.0",
   "devDependencies": {
