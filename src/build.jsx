@@ -22,7 +22,7 @@ export const start = (params, cxt) => {
     data: ""
   }, cxt);
 
-  const config = Config.get(folder, ".config", {});
+  const config = Config.load(folder);
 
   const filesToCopy = ["deployment.yaml", "service.yaml"];
   const outputPath = path.join(folder, "dist");
