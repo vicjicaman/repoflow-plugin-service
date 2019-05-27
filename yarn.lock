@@ -2,10 +2,10 @@
 # yarn lockfile v1
 
 
-"@nebulario/core-plugin-request@1.70.1-publish-handler-prod":
-  version "1.70.1-publish-handler-prod"
-  resolved "https://registry.yarnpkg.com/@nebulario/core-plugin-request/-/core-plugin-request-1.70.1-publish-handler-prod.tgz#42b6ea0d935d1081bf64a14aa6925a08bed14571"
-  integrity sha512-l0Ws4bLoMXoKzeFpDS9C9m/i2E+V2PkPJPox304gx3uu2r4jjUxGm3QRJEaSbJ9hrcAyq8sVoB4q8W3uWa9AUw==
+"@nebulario/core-plugin-request@1.70.2-master":
+  version "1.70.2-master"
+  resolved "https://registry.yarnpkg.com/@nebulario/core-plugin-request/-/core-plugin-request-1.70.2-master.tgz#4353c9e3e70f865958b577551f8de8e2c4f02b88"
+  integrity sha512-YfabHMMkLwm3lduw0E05W3Z/ML2VQcSCDm+5KbgT86IWy7av9Ihkcy+iqc1JG+YILqxiJQjBO9tjrzJo4xOU3w==
   dependencies:
     "@nebulario/core-process" "1.70.0-master"
     babel-runtime "^6.26.0"
