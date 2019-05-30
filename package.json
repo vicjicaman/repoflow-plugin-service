@@ -1,6 +1,6 @@
 {
   "name": "@nebulario/repoflow-plugin-service",
-  "version": "1.70.0-master",
+  "version": "1.70.1-master",
   "description": "Base for nodes",
   "main": "./dist/index.js",
   "repository": "github.com:vicjicaman/repoflow-plugin-service.git",
