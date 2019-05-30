@@ -1,4 +1,5 @@
 {
+  "type": "service",
   "command": {
       "cmd": "node",
       "args": ["${PLUGIN_HOME}/dist/index.js", "${PLUGIN_INITIAL_PAYLOAD}"]
