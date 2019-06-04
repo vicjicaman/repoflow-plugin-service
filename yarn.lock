@@ -2,10 +2,10 @@
 # yarn lockfile v1
 
 
-"@nebulario/core-plugin-request@1.70.0-plugin-timeout-prod":
-  version "1.70.0-plugin-timeout-prod"
-  resolved "https://registry.yarnpkg.com/@nebulario/core-plugin-request/-/core-plugin-request-1.70.0-plugin-timeout-prod.tgz#b7ba2dfedf0024c62aa6050a25a07a176a92ffee"
-  integrity sha512-FqatjH9MJZhjSqlbCEvewfh8mudxpWozVxokCY+P4AzD+U2s6iCUxs6GGAcnZqDu8eNvkc1hLfM/PnBDcEvU7A==
+"@nebulario/core-plugin-request@1.70.3-master":
+  version "1.70.3-master"
+  resolved "https://registry.yarnpkg.com/@nebulario/core-plugin-request/-/core-plugin-request-1.70.3-master.tgz#b148ea3289b5dd582764085669011ba871d216a5"
+  integrity sha512-6hFRg+B9IllquxpFiuKxfym2+QWlenayJ3Iygd6gotuogPCUUYEVa32kTR6XYn751sldOiMcRVuj7vsJbGayfg==
   dependencies:
     "@nebulario/core-process" "1.70.0-master"
     axios "^0.19.0"
