@@ -4,8 +4,6 @@ import * as Dependencies from './dependencies';
 import * as Build from './build';
 import * as Run from './run';
 import {publish} from './publish';
-import {init} from './init';
-import {configure} from './configure';
 
 (async () => {
 
