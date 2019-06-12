@@ -1,6 +1,6 @@
 {
   "name": "@nebulario/repoflow-plugin-service",
-  "version": "1.70.0-resolve-workspace-prod",
+  "version": "1.70.1-resolve-workspace-prod",
   "description": "Base for nodes",
   "main": "./dist/index.js",
   "repository": "github.com:vicjicaman/repoflow-plugin-service.git",
