@@ -2,10 +2,10 @@
 # yarn lockfile v1
 
 
-"@nebulario/core-plugin-request@1.70.0-resolve-workspace-plugins-prod":
-  version "1.70.0-resolve-workspace-plugins-prod"
-  resolved "https://registry.yarnpkg.com/@nebulario/core-plugin-request/-/core-plugin-request-1.70.0-resolve-workspace-plugins-prod.tgz#df1acd6b93978f1ceff34453b79f2a818cc5ee72"
-  integrity sha512-VfrmK0DkAddpHWG6B2CrcJPqonXMHmbBy8DgJFKMABjypToak7AebwkB1yt4mP8DDkJKaodiCK8SVCzAc7wjAw==
+"@nebulario/core-plugin-request@1.70.5-master":
+  version "1.70.5-master"
+  resolved "https://registry.yarnpkg.com/@nebulario/core-plugin-request/-/core-plugin-request-1.70.5-master.tgz#6784068648eb53df233d33481a32e006914e00a8"
+  integrity sha512-TRNZlCvJ4+G30Iz9Dp7ANyzX8u0HmFtnw93SNp3mmG+5Kk0AkOFp8ldHVXXcmJlrkpLi2q3OW88VEa70m7PTkw==
   dependencies:
     "@nebulario/core-process" "1.70.0-master"
     axios "^0.19.0"
