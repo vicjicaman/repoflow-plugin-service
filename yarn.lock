@@ -2,12 +2,12 @@
 # yarn lockfile v1
 
 
-"@nebulario/core-plugin-request@1.70.6-master":
-  version "1.70.6-master"
-  resolved "https://registry.yarnpkg.com/@nebulario/core-plugin-request/-/core-plugin-request-1.70.6-master.tgz#112a177991314935e4b8356d529d88a7b0c6cefc"
-  integrity sha512-MRfMs/Sn5/rMm5Yl5na8sZg2n9I4vTzLOLo+MT8XVBZM05DdHo4zAdi/35AYlxdEhZvyon0QURwpLQCzZY6jMw==
+"@nebulario/core-plugin-request@1.70.0-beta-public-plugins-prod":
+  version "1.70.0-beta-public-plugins-prod"
+  resolved "https://registry.yarnpkg.com/@nebulario/core-plugin-request/-/core-plugin-request-1.70.0-beta-public-plugins-prod.tgz#35f2f20d3783ffb42d138fa721867c350a50622e"
+  integrity sha512-M6bGePeSIuV0r4pgAUvqpzxNkMFCdl4URRiA4j+Zwns+wKXAdWXSCLUGuLtjbOo98g/E2gtT8tj8zWJ7vQnTlQ==
   dependencies:
-    "@nebulario/core-process" "1.70.0-master"
+    "@nebulario/core-process" "1.70.1-master"
     axios "^0.19.0"
     babel-runtime "^6.26.0"
     bluebird "^3.5.1"
@@ -15,9 +15,10 @@
     tree-kill "^1.2.0"
     yamljs "^0.3.0"
 
-"@nebulario/core-process@1.70.0-master":
-  version "1.70.0-master"
-  resolved "https://registry.yarnpkg.com/@nebulario/core-process/-/core-process-1.70.0-master.tgz#614bb5134de536ca7ee949f4282ddab37924f5e4"
+"@nebulario/core-process@1.70.1-master":
+  version "1.70.1-master"
+  resolved "https://registry.yarnpkg.com/@nebulario/core-process/-/core-process-1.70.1-master.tgz#0f6b7eb56e87d663c551fccc97433b1f6088440a"
+  integrity sha512-hN2k0dGItpzqs9TqQNa+aOGIOkT5PlIevE+lQKii7EzaB/O4DGpnIzkLaMVhFvC2A8CiT16N7HvchIpztr6SUA==
   dependencies:
     babel-runtime "^6.26.0"
     bluebird "^3.5.1"
