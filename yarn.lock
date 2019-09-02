@@ -2,9 +2,18 @@
 # yarn lockfile v1
 
 
-"@nebulario/core-config@link:../core-config":
-  version "0.0.0"
-  uid ""
+"@nebulario/core-config@1.70.0-plugins-local-prod":
+  version "1.70.0-plugins-local-prod"
+  resolved "https://registry.yarnpkg.com/@nebulario/core-config/-/core-config-1.70.0-plugins-local-prod.tgz#a8a1e50bac89f0fd5352fa10b110e21c170ec559"
+  integrity sha512-wYNQxN1aHq80jKOBnk+5wF+oBrl7jsDUGB/ZNuHNS98jxUUKcARDjBn7PVafE017STrcDMIExF4wrWqvZ7b/Sg==
+  dependencies:
+    "@nebulario/core-json" "1.70.1-master"
+    "@nebulario/core-repository" "1.70.1-master"
+    babel-runtime "^6.26.0"
+    bluebird "^3.5.1"
+    child-process-promise "^2.2.1"
+    lodash "^4.17.4"
+    uuid "^3.3.2"
 
 "@nebulario/core-json@1.70.1-master":
   version "1.70.1-master"
