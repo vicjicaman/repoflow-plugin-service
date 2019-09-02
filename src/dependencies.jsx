@@ -4,10 +4,10 @@ import path from 'path';
 //import YAML from 'yamljs'
 import {
   Operation,
-  IO,
-  Config,
-  JSON
+  IO
 } from '@nebulario/core-plugin-request';
+import * as Config from '@nebulario/core-config';
+import * as JsonUtils from '@nebulario/core-json'
 
 
 export const list = async ({
@@ -22,13 +22,18 @@ export const list = async ({
     }
   }
 }, cxt) => {
-  const {
-    pluginid
-  } = cxt;
-  const dependencies = [];
+  const dependencies = [{
+    dependencyid: 'inner|service.yaml|version',
+    kind: "dependency",
+    filename: "service.yaml",
+    path: "version",
+    fullname: "test",
+    version: "1.0.1"
+  }];
+
 
   {
-    const service = JSON.load(folder, "service.yaml", true);
+    const service = JsonUtils.load(folder + "/dist/service.yaml", true);
 
     const versionPath = "metadata.labels.version"
     const version = _.get(service, versionPath);
@@ -42,7 +47,7 @@ export const list = async ({
       version
     });
   } {
-    const deployment = load(folder, "deployment.yaml", true);
+    const deployment = JsonUtils.load(folder + "/dist/deployment.yaml", true);
 
     const versionPath = "metadata.labels.version";
     const version = _.get(deployment, versionPath);
@@ -114,7 +119,7 @@ export const sync = async ({
       return native;
     }
 
-    JSON.sync(
+    JsonUtils.sync(
       folder, {
         filename,
         path,
@@ -126,7 +131,7 @@ export const sync = async ({
 
   if (kind === "config") {
 
-    JSON.sync(folder, {
+    JsonUtils.sync(folder, {
       filename,
       path,
       version
