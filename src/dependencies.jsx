@@ -22,18 +22,11 @@ export const list = async ({
     }
   }
 }, cxt) => {
-  const dependencies = [{
-    dependencyid: 'inner|service.yaml|version',
-    kind: "dependency",
-    filename: "service.yaml",
-    path: "version",
-    fullname: "test",
-    version: "1.0.1"
-  }];
+  const dependencies = [];
 
 
   {
-    const service = JsonUtils.load(folder + "/dist/service.yaml", true);
+    const service = JsonUtils.load(folder + "/service.yaml", true);
 
     const versionPath = "metadata.labels.version"
     const version = _.get(service, versionPath);
@@ -47,7 +40,7 @@ export const list = async ({
       version
     });
   } {
-    const deployment = JsonUtils.load(folder + "/dist/deployment.yaml", true);
+    const deployment = JsonUtils.load(folder + "/deployment.yaml", true);
 
     const versionPath = "metadata.labels.version";
     const version = _.get(deployment, versionPath);
@@ -127,8 +120,7 @@ export const sync = async ({
       }, true, path.includes("|") ?
       containerPathSetter :
       null);
-  }
-
+  } else
   if (kind === "config") {
 
     JsonUtils.sync(folder, {
@@ -136,6 +128,14 @@ export const sync = async ({
       path,
       version
     });
+
+  } else {
+
+    JsonUtils.sync(folder, {
+      filename,
+      path,
+      version
+    }, true);
 
   }
 
