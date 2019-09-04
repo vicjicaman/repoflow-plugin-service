@@ -2,12 +2,32 @@
 # yarn lockfile v1
 
 
-"@nebulario/core-plugin-request@1.70.0-beta-public-plugins-prod":
-  version "1.70.0-beta-public-plugins-prod"
-  resolved "https://registry.yarnpkg.com/@nebulario/core-plugin-request/-/core-plugin-request-1.70.0-beta-public-plugins-prod.tgz#35f2f20d3783ffb42d138fa721867c350a50622e"
-  integrity sha512-M6bGePeSIuV0r4pgAUvqpzxNkMFCdl4URRiA4j+Zwns+wKXAdWXSCLUGuLtjbOo98g/E2gtT8tj8zWJ7vQnTlQ==
+"@nebulario/core-config@1.70.2-master":
+  version "1.70.2-master"
+  resolved "https://registry.yarnpkg.com/@nebulario/core-config/-/core-config-1.70.2-master.tgz#9cc531ad43752cadce9f4be010def3c95b07bac2"
+  integrity sha512-hcnobQNndln/CVOAsjEGAFzjF+ka5aTRSyuZ1Ksi1y5tMxyB8XKvSg0YCNpkn+5foqdAhWiuRmiLvgyCbBtwog==
   dependencies:
-    "@nebulario/core-process" "1.70.1-master"
+    "@nebulario/core-json" "1.70.1-master"
+    "@nebulario/core-repository" "1.70.1-master"
+    babel-runtime "^6.26.0"
+    bluebird "^3.5.1"
+    child-process-promise "^2.2.1"
+    lodash "^4.17.4"
+    uuid "^3.3.2"
+
+"@nebulario/core-json@1.70.1-master":
+  version "1.70.1-master"
+  resolved "https://registry.yarnpkg.com/@nebulario/core-json/-/core-json-1.70.1-master.tgz#7731a6a1d93b3887dde5566f45710116732dfdd8"
+  integrity sha512-OrqH2P3JBHeZ3bll8o4IYZTwV5uR2UubLU4l+KAYK2kRIk96mnL+NScAWoTqm2v9PztN/RhCZRxtzqACYxYh2Q==
+  dependencies:
+    yamljs "^0.3.0"
+
+"@nebulario/core-plugin-request@1.70.6-master":
+  version "1.70.6-master"
+  resolved "https://registry.yarnpkg.com/@nebulario/core-plugin-request/-/core-plugin-request-1.70.6-master.tgz#112a177991314935e4b8356d529d88a7b0c6cefc"
+  integrity sha512-MRfMs/Sn5/rMm5Yl5na8sZg2n9I4vTzLOLo+MT8XVBZM05DdHo4zAdi/35AYlxdEhZvyon0QURwpLQCzZY6jMw==
+  dependencies:
+    "@nebulario/core-process" "1.70.0-master"
     axios "^0.19.0"
     babel-runtime "^6.26.0"
     bluebird "^3.5.1"
@@ -25,6 +45,13 @@
     child-process-promise "^2.2.1"
     lodash "^4.17.4"
     uuid "^3.3.2"
+
+"@nebulario/core-repository@1.70.1-master":
+  version "1.70.1-master"
+  resolved "https://registry.yarnpkg.com/@nebulario/core-repository/-/core-repository-1.70.1-master.tgz#33e5837e2a12313f4fb4a6cfe28e5acddc366df5"
+  integrity sha512-d/cCCYXXId0Pd+26uQgOtD7RpQgYuORG9kxKnZQR//XBcxBf55V45HyYBNWnQieehNErzuwHysJfYoUeUTzvAQ==
+  dependencies:
+    "@nebulario/core-process" "1.70.1-master"
 
 abbrev@1:
   version "1.1.1"

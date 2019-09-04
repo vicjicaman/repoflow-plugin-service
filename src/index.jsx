@@ -16,8 +16,8 @@ import {publish} from './publish';
       start: Run.start
     },
     build: {
-      configure,
-      init,
+      clear: Build.clear,
+      init: Build.init,
       start: Build.start
     },
     publish
