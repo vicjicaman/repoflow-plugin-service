@@ -1,6 +1,6 @@
 {
   "name": "@nebulario/repoflow-plugin-service",
-  "version": "1.70.0-beta-public-plugins-prod",
+  "version": "1.70.7-master",
   "description": "Base for nodes",
   "main": "./dist/index.js",
   "repository": "github.com:vicjicaman/repoflow-plugin-service.git",
@@ -36,7 +36,7 @@
     "analyze": "webpack --config webpack.config.js --env.analyze"
   },
   "dependencies": {
-    "@nebulario/core-plugin-request": "1.70.0-beta-public-plugins-prod",
+    "@nebulario/core-plugin-request": "1.70.6-master",
     "@nebulario/core-process": "1.70.1-master",
     "axios": "^0.18.0",
     "babel-runtime": "^6.26.0",
