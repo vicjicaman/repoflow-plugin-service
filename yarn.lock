@@ -22,10 +22,10 @@
   dependencies:
     yamljs "^0.3.0"
 
-"@nebulario/core-plugin-request@1.70.3-stateful-plugin-prod":
-  version "1.70.3-stateful-plugin-prod"
-  resolved "https://registry.yarnpkg.com/@nebulario/core-plugin-request/-/core-plugin-request-1.70.3-stateful-plugin-prod.tgz#7559eb474dbf1b112a827117162e18752cb1d33a"
-  integrity sha512-foSmya9Mp8Uf2w+frEJzZnBCMncsg6Xt6uW9ZntxtQG1gM/ugBKbTRI1QvLbPrReAllweyS9KwvMBY8WiDn5Pg==
+"@nebulario/core-plugin-request@1.70.8-master":
+  version "1.70.8-master"
+  resolved "https://registry.yarnpkg.com/@nebulario/core-plugin-request/-/core-plugin-request-1.70.8-master.tgz#b738abdde4eb96cd8e531d9ab23b2f7d378ab137"
+  integrity sha512-eMtST0tOLiOcT5DAt4493WirbhiGpxmZ7nxqHr+/MAX9MyWvGiM6XQhOL4bcAfMGRE0gPE/WPEAih7Gg1YIZQw==
   dependencies:
     "@nebulario/core-process" "1.70.1-master"
     axios "^0.19.0"
