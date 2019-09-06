@@ -10,6 +10,7 @@ import {
 import {
   IO
 } from '@nebulario/core-plugin-request';
+import * as JsonUtils from '@nebulario/core-json'
 
 
 const modify = (folder, compFile, func) => {
@@ -28,6 +29,58 @@ const modify = (folder, compFile, func) => {
   const mod = func(content);
 
   fs.writeFileSync(destFile, YAML.stringify(mod, 10, 2), "utf8");
+}
+
+
+export const listen = async (params, cxt) => {
+
+
+  const {
+    operation: {
+      params: {
+        performers,
+        performer,
+        performer: {
+          type,
+          code: {
+            paths: {
+              absolute: {
+                folder
+              }
+            }
+          },
+          dependents,
+          module: {
+            dependencies
+          }
+        },
+        feature: {
+          featureid
+        }
+      }
+    }
+  } = params;
+
+  const deploymentTmpPath = path.join(folder, "tmp", "deployment.yaml");
+  const deploy = JsonUtils.load(deploymentTmpPath, true);
+
+  const igosut = await exec(["kubectl get pods --selector=app=" + deploy.metadata.name + " --namespace=" + deploy.metadata.namespace + " --template '{{range .items}}{{.metadata.name}}{{\"\\n\"}}{{end}}'"], {}, {}, cxt);
+
+  const pods = igosut.stdout.trim().split("\n");
+
+  IO.sendEvent("out", {
+    data: "Pods " + igosut.stdout
+  }, cxt);
+
+  for (const podid of pods) {
+
+    IO.sendEvent("out", {
+      data: "Restarting pod " + podid
+    }, cxt);
+
+    await exec(["kubectl exec -i " + podid + " -c app --namespace=" + deploy.metadata.namespace + " -- /bin/sh -c \"echo echo date +%s%N > signal\" "], {}, {}, cxt);
+  }
+
 }
 
 export const start = (params, cxt) => {
@@ -68,12 +121,6 @@ export const start = (params, cxt) => {
       data: "Setting service config..."
     }, cxt);
 
-
-    /*IO.sendEvent("out", {
-      data: JSON.stringify(params, null, 2)
-    }, cxt);*/
-
-
     const servicePath = path.join(folder, "dist", "service.yaml");
     const serviceTmpPath = path.join(folder, "tmp", "service.yaml");
 
@@ -98,8 +145,6 @@ export const start = (params, cxt) => {
     modify(folder, "deployment.yaml", content => {
 
       content.metadata.namespace = featureid + "-" + content.metadata.namespace;
-
-
 
       for (const depSrv of dependents) {
         const depSrvPerformer = _.find(performers, {
@@ -126,9 +171,11 @@ export const start = (params, cxt) => {
               }, cxt);
 
 
-              const currCont = _.find(content.spec.template.spec.containers, ({name}) => name === service );
+              const currCont = _.find(content.spec.template.spec.containers, ({
+                name
+              }) => name === service);
 
-              if(currCont){
+              if (currCont) {
                 const [imgName, imgVer] = currCont.image.split(":");
                 currCont.image = imgName + ":linked";
 
@@ -162,10 +209,12 @@ export const start = (params, cxt) => {
                         path: "/instance/modules/" + moduleid,
                         type: "Directory"
                       }
-
                     }]
 
                     content.spec.template.spec.containers = content.spec.template.spec.containers.map(cont => {
+
+                      cont.command = ["node"];
+                      cont.args = ["/app/node_modules/@nebulario/microservice-auth-graph/node_modules/nodemon/bin/nodemon.js", "-L", "--watch", "signal", "/app/node_modules/@nebulario/microservice-auth-graph/src/index.js"];
 
                       cont.volumeMounts = [{
                         name: moduleid,
@@ -265,6 +314,8 @@ export const start = (params, cxt) => {
       })*/
       return content;
     });
+
+
 
     const igosut = await exec(["kubectl apply -f " + deploymentTmpPath], {}, {}, cxt);
 
