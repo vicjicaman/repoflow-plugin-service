@@ -120,23 +120,24 @@ export const sync = async ({
       }, true, path.includes("|") ?
       containerPathSetter :
       null);
-  } else
-  if (kind === "config") {
-
-    JsonUtils.sync(folder, {
-      filename,
-      path,
-      version
-    });
-
   } else {
+    if (kind === "config") {
 
-    JsonUtils.sync(folder, {
-      filename,
-      path,
-      version
-    }, true);
+      JsonUtils.sync(folder, {
+        filename,
+        path,
+        version
+      });
 
+    } else {
+
+      JsonUtils.sync(folder, {
+        filename,
+        path,
+        version
+      }, true);
+
+    }
   }
 
 
