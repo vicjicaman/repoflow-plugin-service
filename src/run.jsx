@@ -61,14 +61,16 @@ export const listen = async (params, cxt) => {
     }
   } = params;
 
-  const deploymentTmpPath = path.join(folder, "tmp", "deployment.yaml");
+  const tmpPath = path.join(folder, "tmp");
+
+  const deploymentTmpPath = path.join(tmpPath, "deployment.yaml");
   const deploy = JsonUtils.load(deploymentTmpPath, true);
 
   const igosut = await exec(["kubectl get pods --selector=app=" + deploy.metadata.name + " --namespace=" + deploy.metadata.namespace + " --template '{{range .items}}{{.metadata.name}}{{\"\\n\"}}{{end}}'"], {}, {}, cxt);
 
   const pods = igosut.stdout.trim().split("\n");
 
-  IO.sendEvent("out", {
+  IO.sendEvent("info", {
     data: "Pods " + igosut.stdout
   }, cxt);
 
@@ -78,10 +80,38 @@ export const listen = async (params, cxt) => {
       data: "Restarting pod " + podid
     }, cxt);
 
-    await exec(["kubectl exec -i " + podid + " -c app --namespace=" + deploy.metadata.namespace + " -- /bin/sh -c \"echo echo date +%s%N > signal\" "], {}, {}, cxt);
+    //kubectl exec -i microservice-auth-web-deployment-857d86956-97w56  -c app --namespace=dev-auth-service-microservices-namespace -- /bin/sh -c "echo date +%s%N > signal"
+    await exec(["kubectl exec -i " + podid + " -c app --namespace=" + deploy.metadata.namespace + " -- /bin/sh -c \"echo date -d@\"$(( `date +%s`+180))\" > /app/RUNTIME_SIGNAL\" "], {}, {}, cxt);
   }
 
 }
+
+const signalScript = `
+var fs = require('fs');
+const {
+  spawn
+} = require('child_process');
+
+function wait(timeout) {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve()
+    }, timeout)
+  })
+}
+
+fs.writeFileSync('/app/RUNTIME_SIGNAL', 'init');
+
+var command = spawn('node', ['node_modules/nodemon/bin/nodemon.js', '-L', '--delay', '1', '--watch', '/app/RUNTIME_SIGNAL', 'dist/index.js']);
+command.stdout.pipe(process.stdout);
+command.stderr.pipe(process.stderr);
+
+(async () => {
+  while (true) {
+    await wait(500);
+  }
+});
+`;
 
 export const start = (params, cxt) => {
 
@@ -107,8 +137,12 @@ export const start = (params, cxt) => {
     }
   } = params;
 
-  if (type !== "instanced") {
-    throw new Error("PERFORMER_NOT_INSTANCED");
+
+  const tmpPath = path.join(folder, "tmp");
+  const distPath = path.join(folder, "dist");
+
+  if (!fs.existsSync(tmpPath)) {
+    fs.mkdirSync(tmpPath);
   }
 
   const watcher = async (operation, cxt) => {
@@ -121,8 +155,8 @@ export const start = (params, cxt) => {
       data: "Setting service config..."
     }, cxt);
 
-    const servicePath = path.join(folder, "dist", "service.yaml");
-    const serviceTmpPath = path.join(folder, "tmp", "service.yaml");
+    const servicePath = path.join(distPath, "service.yaml");
+    const serviceTmpPath = path.join(tmpPath, "service.yaml");
 
     modify(folder, "service.yaml", content => {
       content.metadata.namespace = featureid + "-" + content.metadata.namespace;
@@ -139,12 +173,13 @@ export const start = (params, cxt) => {
       data: "Setting deployment config..."
     }, cxt);
 
-    const deploymentPath = path.join(folder, "dist", "deployment.yaml");
-    const deploymentTmpPath = path.join(folder, "tmp", "deployment.yaml");
+    const deploymentPath = path.join(distPath, "deployment.yaml");
+    const deploymentTmpPath = path.join(tmpPath, "deployment.yaml");
 
     modify(folder, "deployment.yaml", content => {
 
-      content.metadata.namespace = featureid + "-" + content.metadata.namespace;
+      const namespace = content.metadata.namespace;
+      content.metadata.namespace = featureid + "-" + namespace;
 
       for (const depSrv of dependents) {
         const depSrvPerformer = _.find(performers, {
@@ -179,6 +214,51 @@ export const start = (params, cxt) => {
                 const [imgName, imgVer] = currCont.image.split(":");
                 currCont.image = imgName + ":linked";
 
+                for (const depSrvApp of depSrvPerformer.dependents) {
+                  const depSrvAppPerformer = _.find(performers, {
+                    performerid: depSrvApp.moduleid
+                  });
+
+                  if (depSrvAppPerformer) {
+                    IO.sendEvent("out", {
+                      data: "Performing dependent NPM found " + depSrvApp.moduleid
+                    }, cxt);
+
+                    if (depSrvAppPerformer.linked.includes("run") && depSrvAppPerformer.module.type === "npm") {
+
+                      IO.sendEvent("info", {
+                        data: " - Linked " + depSrvApp.moduleid
+                      }, cxt);
+
+
+                      const tmpAppPath = path.join(depSrvAppPerformer.code.paths.absolute.folder, "tmp");
+
+                      if (!fs.existsSync(tmpAppPath)) {
+                        fs.mkdirSync(tmpAppPath);
+                      }
+
+                      fs.writeFileSync(path.join(tmpAppPath, "signal.js"), signalScript);
+                      const appFullname = depSrvAppPerformer.module.fullname;
+
+                      currCont.command = ["node"];
+                      //currCont.args = ["node_modules/nodemon/bin/nodemon.js", "-L", "--watch", "/app/RUNTIME_SIGNAL", "dist/index.js"];
+                      currCont.args = ["tmp/signal.js"]
+
+                    } else {
+                      IO.sendEvent("warning", {
+                        data: " - Not linked " + depSrvApp.moduleid
+                      }, cxt);
+                    }
+
+
+                  }
+
+                }
+
+
+
+                const npmMounted = []
+
                 for (const perf of performers) {
 
                   const {
@@ -199,32 +279,57 @@ export const start = (params, cxt) => {
 
                   if (linked.includes("run") && type === "npm") {
 
-                    IO.sendEvent("info", {
-                      data: " - NPM linked " + perf.performerid
+                    IO.sendEvent("out", {
+                      data: " - NPM mounted " + perf.performerid
                     }, cxt);
 
+                    npmMounted.push(perf);
                     content.spec.template.spec.volumes = [{
                       name: moduleid,
                       hostPath: {
                         path: "/instance/modules/" + moduleid,
                         type: "Directory"
                       }
-                    }]
-
-                    content.spec.template.spec.containers = content.spec.template.spec.containers.map(cont => {
-
-                      cont.command = ["node"];
-                      cont.args = ["/app/node_modules/@nebulario/microservice-auth-graph/node_modules/nodemon/bin/nodemon.js", "-L", "--watch", "signal", "/app/node_modules/@nebulario/microservice-auth-graph/src/index.js"];
-
-                      cont.volumeMounts = [{
-                        name: moduleid,
-                        mountPath: "/app/node_modules/" + fullname
-                      }]
-
-                      return cont;
-                    })
+                    }, ...(content.spec.template.spec.volumes || [])]
                   }
+
                 }
+
+                content.spec.template.spec.containers = content.spec.template.spec.containers.map(cont => {
+
+                  const HOST_ENV = _.find(cont.env, ({
+                    name
+                  }) => name === "HOST");
+                  if (HOST_ENV) {
+                    const host = HOST_ENV.value;
+
+                    cont.env = cont.env.map(({
+                      name,
+                      value
+                    }) => ({
+                      name,
+                      value: (typeof value === "string") ? value.replace(host, featureid + "-" + host) : value
+                    }));
+
+                  }
+
+                  cont.env = cont.env.map(({
+                    name,
+                    value
+                  }) => ({
+                    name,
+                    value: (typeof value === "string") ? value.replace(namespace, featureid + "-" + namespace) : value
+                  }));
+
+                  for (const mountperf of npmMounted) {
+                    cont.volumeMounts = [{
+                      name: mountperf.performerid,
+                      mountPath: "/app/node_modules/" + mountperf.module.fullname
+                    }, ...(cont.volumeMounts || [])]
+                  }
+
+                  return cont;
+                });
 
               }
 

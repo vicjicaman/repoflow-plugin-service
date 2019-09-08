@@ -12,9 +12,8 @@ import {
   IO,
   Watcher
 } from '@nebulario/core-plugin-request';
-
 import * as Config from '@nebulario/core-config';
-import * as JsonUtils from '@nebulario/core-json'
+import * as JsonUtils from '@nebulario/core-json';
 
 
 
@@ -54,7 +53,9 @@ export const clear = async (params, cxt) => {
 export const init = async (params, cxt) => {
 
   const {
+    performers,
     performer: {
+      dependents,
       type,
       code: {
         paths: {
@@ -68,6 +69,39 @@ export const init = async (params, cxt) => {
 
   if (type !== "instanced") {
     throw new Error("PERFORMER_NOT_INSTANCED");
+  }
+
+
+  for (const depSrv of dependents) {
+    const depSrvPerformer = _.find(performers, {
+      performerid: depSrv.moduleid
+    });
+
+    if (depSrvPerformer) {
+      IO.sendEvent("out", {
+        data: "Performing dependent found " + depSrv.moduleid
+      }, cxt);
+
+      if (depSrvPerformer.linked.includes("build")) {
+
+        IO.sendEvent("info", {
+          data: " - Linked " + depSrv.moduleid
+        }, cxt);
+
+        JsonUtils.sync(folder, {
+          filename: "config.json",
+          path: "dependencies." + depSrv.moduleid + ".version",
+          version: "file:./../" + depSrv.moduleid
+        });
+
+      } else {
+        IO.sendEvent("warning", {
+          data: " - Not linked " + depSrv.moduleid
+        }, cxt);
+      }
+
+
+    }
   }
 
   try {
@@ -85,7 +119,9 @@ export const init = async (params, cxt) => {
 export const start = (params, cxt) => {
 
   const {
+    performers,
     performer: {
+      dependents,
       type,
       code: {
         paths: {
@@ -107,13 +143,41 @@ export const start = (params, cxt) => {
   const deploymentPath = path.join(folder, "deployment.yaml");
 
 
+
+  for (const depSrv of dependents) {
+    const depSrvPerformer = _.find(performers, {
+      performerid: depSrv.moduleid
+    });
+
+    if (depSrvPerformer) {
+      IO.sendEvent("out", {
+        data: "Performing dependent found " + depSrv.moduleid
+      }, cxt);
+
+      if (depSrvPerformer.linked.includes("build")) {
+
+        IO.sendEvent("info", {
+          data: " - Linked " + depSrv.moduleid
+        }, cxt);
+
+      } else {
+        IO.sendEvent("warning", {
+          data: " - Not linked " + depSrv.moduleid
+        }, cxt);
+      }
+
+
+    }
+
+  }
+
+
   const watcher = async (operation, cxt) => {
 
     const {
       operationid
     } = operation;
 
-    await wait(100);
 
     IO.sendEvent("out", {
       operationid,

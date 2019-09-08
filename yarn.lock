@@ -15,7 +15,7 @@
     lodash "^4.17.4"
     uuid "^3.3.2"
 
-"@nebulario/core-json@1.70.1-master":
+"@nebulario/core-json@1.70.1-master", "@nebulario/core-json@^1.70.1-master":
   version "1.70.1-master"
   resolved "https://registry.yarnpkg.com/@nebulario/core-json/-/core-json-1.70.1-master.tgz#7731a6a1d93b3887dde5566f45710116732dfdd8"
   integrity sha512-OrqH2P3JBHeZ3bll8o4IYZTwV5uR2UubLU4l+KAYK2kRIk96mnL+NScAWoTqm2v9PztN/RhCZRxtzqACYxYh2Q==
