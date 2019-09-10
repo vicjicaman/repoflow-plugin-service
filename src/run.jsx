@@ -102,7 +102,7 @@ function wait(timeout) {
 
 fs.writeFileSync('/app/RUNTIME_SIGNAL', 'init');
 
-var command = spawn('node', ['node_modules/nodemon/bin/nodemon.js', '-L', '--delay', '1', '--watch', '/app/RUNTIME_SIGNAL', 'dist/index.js']);
+var command = spawn('node', ['node_modules/nodemon/bin/nodemon.js', '-L', '--delay', '0', '--watch', '/app/RUNTIME_SIGNAL', 'dist/index.js']);
 command.stdout.pipe(process.stdout);
 command.stderr.pipe(process.stderr);
 
