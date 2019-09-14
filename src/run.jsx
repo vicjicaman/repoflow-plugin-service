@@ -3,8 +3,10 @@ import fs from "fs-extra";
 import path from "path";
 import YAML from "yamljs";
 import { spawn, wait, exec } from "@nebulario/core-process";
+import { execSync } from "child_process";
 import { IO } from "@nebulario/core-plugin-request";
 import * as JsonUtils from "@nebulario/core-json";
+const uuidv4 = require("uuid/v4");
 
 const modify = (folder, compFile, func) => {
   const inputPath = path.join(folder, "dist");
@@ -24,8 +26,83 @@ const modify = (folder, compFile, func) => {
   fs.writeFileSync(destFile, YAML.stringify(mod, 10, 2), "utf8");
 };
 
+const execToPod = async (namespace, podid, cmd, cxt) => {
+  return await exec(
+    [
+      "kubectl exec -i " +
+        podid +
+        " -c app --namespace=" +
+        namespace +
+        ' -- /bin/sh -c "' +
+        cmd +
+        '" '
+    ],
+    {},
+    {},
+    cxt
+  );
+};
+//ssh -oStrictHostKeyChecking=no -i $(minikube ssh-key) docker@$(minikube ip) "find /home/docker/instances/dev-auth-service/modules/microservice-auth-web-container/ -type d -name microservice-layout
+
+const cpToPod = async (namespace, podid, source, target, cxt) => {
+  //kubectl cp /tmp/foo <some-namespace>/<some-pod>:/tmp/bar
+
+  return await exec(
+    ["kubectl cp " + source + " " + namespace + "/" + podid + ":" + target],
+    {},
+    {},
+    cxt
+  );
+};
+
+const execToHost = async (cmd, cxt) => {
+  return await exec(
+    [
+      'ssh -oStrictHostKeyChecking=no -i $(minikube ssh-key) docker@$(minikube ip) "' +
+        cmd +
+        '"'
+    ],
+    {},
+    {},
+    cxt
+  );
+};
+
+const copyToHost = (source, target, cxt) => {
+
+  const copyCmd =
+    'ssh -oStrictHostKeyChecking=no -i $(minikube ssh-key) docker@$(minikube ip) "rm -Rf ' +
+    target +
+    ";mkdir -p " +
+    target +
+    '" && scp -pr -oStrictHostKeyChecking=no  -i $(minikube ssh-key) ' +
+    source +
+    "/* docker@$(minikube ip):" +
+    target;
+
+  return execSync(copyCmd);
+};
+
+const getDeploymentPods = async (namespace, name, cxt) => {
+  const igosut = await exec(
+    [
+      "kubectl get pods --selector=app=" +
+        name +
+        " --namespace=" +
+        namespace +
+        " --template '{{range .items}}{{.metadata.name}}{{\"\\n\"}}{{end}}'"
+    ],
+    {},
+    {},
+    cxt
+  );
+
+  return igosut.stdout.trim().split("\n");
+};
+
 export const listen = async (params, cxt) => {
   const {
+    performerid,
     operation: {
       params: {
         performers,
@@ -40,47 +117,128 @@ export const listen = async (params, cxt) => {
           dependents,
           module: { dependencies }
         },
-        feature: { featureid }
+        instance: {
+          instanceid,
+          paths: {
+            absolute: { folder: instanceFolder }
+          }
+        }
       }
     }
   } = params;
+
+  /*IO.sendEvent(
+    "info",
+    {
+      data: JSON.stringify(params, null, 2)
+    },
+    cxt
+  );
+
+  copyToHost(
+    path.join(instanceFolder, "modules", performerid, "dist"),
+    "instances/" + instanceid + "/output/" + performerid
+  */
+
+  //find /app -type d -name microservice-layout
 
   const tmpPath = path.join(folder, "tmp");
 
   const deploymentTmpPath = path.join(tmpPath, "deployment.yaml");
   const deploy = JsonUtils.load(deploymentTmpPath, true);
 
-  const igosut = await exec(
-    [
-      "kubectl get pods --selector=app=" +
-        deploy.metadata.name +
-        " --namespace=" +
-        deploy.metadata.namespace +
-        " --template '{{range .items}}{{.metadata.name}}{{\"\\n\"}}{{end}}'"
-    ],
-    {},
-    {},
+  const pods = await getDeploymentPods(
+    deploy.metadata.namespace,
+    deploy.metadata.name,
     cxt
   );
-
-  const pods = igosut.stdout.trim().split("\n");
 
   IO.sendEvent(
     "info",
     {
-      data: "Pods " + igosut.stdout
+      data: "Pods " + pods
     },
     cxt
   );
 
-  for (const podid of pods) {
+  let serviceid = null;
+
+  for (const depSrv of dependents) {
+    const depSrvPerformer = _.find(performers, {
+      performerid: depSrv.moduleid
+    });
+
+    if (depSrvPerformer) {
+      if (depSrvPerformer.linked.includes("run")) {
+        const serviceLabel = _.find(depSrvPerformer.labels, lbl =>
+          lbl.startsWith("service:")
+        );
+
+        if (serviceLabel) {
+          serviceid = depSrvPerformer.performerid;
+        }
+      }
+    }
+  }
+
+
+  const paths = await execToHost("find /home/docker/instances/"+path.join(
+    instanceid,
+    "modules",
+    serviceid
+  )+" -type d -name " + performerid, cxt);
+
+  const pathLines = paths.stdout.trim().split("\n");
+
+
+
+  for (const line of pathLines) {
+
+
     IO.sendEvent(
       "out",
       {
-        data: "Restarting pod " + podid
+        data: "Update  " + line
       },
       cxt
     );
+
+
+    await copyToHost(
+      path.join(instanceFolder, "modules", performerid, "dist"),
+      path.join(line, "dist"), cxt
+    );
+  }
+
+
+
+  for (const podid of pods) {
+    const cmdid = uuidv4();
+
+    IO.sendEvent(
+      "out",
+      {
+        data: "Restarting inner container app " + podid
+      },
+      cxt
+    );
+
+    await execToPod(
+      deploy.metadata.namespace,
+      podid,
+      'echo "cmd:restart:' + cmdid + '" > /tmp/agent-input',
+      cxt
+    );
+  }
+
+  /*
+
+  find /app -type d -name microservice-layout
+  find /app -type d -name microservice-layout
+
+
+  for (const podid of pods) {
+
 
     //kubectl exec -i microservice-auth-web-deployment-857d86956-97w56  -c app --namespace=dev-auth-service-microservices-namespace -- /bin/sh -c "echo date +%s%N > agent"
     await exec(
@@ -96,6 +254,7 @@ export const listen = async (params, cxt) => {
       cxt
     );
   }
+  */
 };
 
 export const init = async (params, cxt) => {
@@ -109,11 +268,87 @@ export const init = async (params, cxt) => {
           absolute: { folder }
         }
       }
+    },
+    instance: {
+      instanceid,
+      paths: {
+        absolute: { folder: instanceFolder }
+      }
     }
   } = params;
 
   if (type !== "instanced") {
     throw new Error("PERFORMER_NOT_INSTANCED");
+  }
+
+  for (const depSrv of dependents) {
+    const depSrvPerformer = _.find(performers, {
+      performerid: depSrv.moduleid
+    });
+
+    if (depSrvPerformer) {
+      IO.sendEvent(
+        "out",
+        {
+          data: "Performing dependent found " + depSrv.moduleid
+        },
+        cxt
+      );
+
+      if (depSrvPerformer.linked.includes("run")) {
+        IO.sendEvent(
+          "info",
+          {
+            data: " - Linked " + depSrv.moduleid
+          },
+          cxt
+        );
+
+        const serviceLabel = _.find(depSrvPerformer.labels, lbl =>
+          lbl.startsWith("service:")
+        );
+
+        if (serviceLabel) {
+          IO.sendEvent(
+            "info",
+            {
+              data:
+                "Initialize instance module... " +
+                depSrvPerformer.module.moduleid
+            },
+            cxt
+          );
+
+          copyToHost(
+            path.join(
+              instanceFolder,
+              "modules",
+              depSrvPerformer.module.moduleid
+            ),
+            "/home/docker/instances/" +
+              instanceid +
+              "/modules/" +
+              depSrvPerformer.module.moduleid
+          );
+        } else {
+          IO.sendEvent(
+            "warning",
+            {
+              data: " - No service label"
+            },
+            cxt
+          );
+        }
+      } else {
+        IO.sendEvent(
+          "warning",
+          {
+            data: " - Not linked " + depSrv.moduleid
+          },
+          cxt
+        );
+      }
+    }
   }
 
   return "Runtime service initialized";
@@ -160,6 +395,7 @@ const mountPackages = (cont, performer, performers, currPath) => {
 
 export const start = (params, cxt) => {
   const {
+    init,
     performers,
     performer,
     performer: {
@@ -172,10 +408,7 @@ export const start = (params, cxt) => {
       dependents,
       module: { dependencies }
     },
-    instance:{
-      instanceid
-    },
-    feature: { featureid },
+    instance: { instanceid },
     plugins
   } = params;
 
@@ -201,7 +434,8 @@ export const start = (params, cxt) => {
     const serviceTmpPath = path.join(tmpPath, "service.yaml");
 
     modify(folder, "service.yaml", content => {
-      content.metadata.namespace = featureid + "-" + content.metadata.namespace;
+      content.metadata.namespace =
+        instanceid + "-" + content.metadata.namespace;
       return content;
     });
 
@@ -228,24 +462,27 @@ export const start = (params, cxt) => {
       cxt
     );
 
+    //kubectl logs -f my-pod -c my-container
+
     const deploymentPath = path.join(distPath, "deployment.yaml");
     const deploymentTmpPath = path.join(tmpPath, "deployment.yaml");
+    let currentApp = null;
 
     modify(folder, "deployment.yaml", content => {
       const namespace = content.metadata.namespace;
-      content.metadata.namespace = featureid + "-" + namespace;
+      content.metadata.namespace = instanceid + "-" + namespace;
 
       content.spec.template.spec.volumes =
         content.spec.template.spec.volumes || [];
 
       content.spec.template.spec.volumes = [
-        {
+        /*{
           name: "instance",
           hostPath: {
             path: "/instance",
             type: "Directory"
           }
-        },
+        },*/
         ...content.spec.template.spec.volumes
       ];
 
@@ -330,20 +567,31 @@ export const start = (params, cxt) => {
                       if (agent) {
                         const appFullname = depSrvAppPerformer.module.fullname;
 
-
+                        currentApp = depSrvAppPerformer;
 
                         currCont.command = ["sh"];
-                        //currCont.command = ["/bin/sh", "-ec", "sleep 1000"];
-                        //currCont.args = ["node_modules/nodemon/bin/nodemon.js", "-L", "--watch", "/app/RUNTIME_SIGNAL", "dist/index.js"];
-                        currCont.args = ["/agent/src/index.sh"];
-
-
+                        currCont.args = [
+                          "/agent/src/index.sh",
+                          Buffer.from(
+                            JSON.stringify({
+                              ...params,
+                              deployment: {
+                                container: depSrvPerformer,
+                                app: depSrvAppPerformer
+                              }
+                            })
+                          ).toString("base64")
+                        ];
 
                         currCont.volumeMounts = currCont.volumeMounts || [];
                         currCont.volumeMounts = [
                           {
                             name: "agent",
                             mountPath: "/agent"
+                          },
+                          {
+                            name: "app",
+                            mountPath: "/app"
                           },
                           ...currCont.volumeMounts
                         ];
@@ -353,6 +601,17 @@ export const start = (params, cxt) => {
                             name: "agent",
                             hostPath: {
                               path: "/home/docker/agent/" + instanceid + "/npm",
+                              type: "Directory"
+                            }
+                          },
+                          {
+                            name: "app",
+                            hostPath: {
+                              path:
+                                "/home/docker/instances/" +
+                                instanceid +
+                                "/modules/" +
+                                depSrvPerformer.module.moduleid,
                               type: "Directory"
                             }
                           },
@@ -415,7 +674,7 @@ export const start = (params, cxt) => {
                         name,
                         value:
                           typeof value === "string"
-                            ? value.replace(host, featureid + "-" + host)
+                            ? value.replace(host, instanceid + "-" + host)
                             : value
                       }));
                     }
@@ -426,7 +685,7 @@ export const start = (params, cxt) => {
                         typeof value === "string"
                           ? value.replace(
                               namespace,
-                              featureid + "-" + namespace
+                              instanceid + "-" + namespace
                             )
                           : value
                     }));
@@ -434,10 +693,10 @@ export const start = (params, cxt) => {
                     cont.volumeMounts = cont.volumeMounts || [];
 
                     cont.volumeMounts = [
-                      {
+                      /*{
                         name: "instance",
                         mountPath: "/instance"
-                      },
+                      },*/
                       ...cont.volumeMounts
                     ];
 
@@ -551,6 +810,121 @@ export const start = (params, cxt) => {
       },
       cxt
     );
+
+    const deploy = JsonUtils.load(deploymentTmpPath, true);
+
+    await wait(500);
+    const pods = await getDeploymentPods(
+      deploy.metadata.namespace,
+      deploy.metadata.name,
+      cxt
+    );
+
+    /*
+    if (init) {
+      for (const podid of pods) {
+        IO.sendEvent(
+          "out",
+          {
+            data: "Initialize pod " + podid
+          },
+          cxt
+        );
+
+        const cmdid = uuidv4();
+        //kubectl exec -i microservice-auth-web-deployment-857d86956-97w56  -c app --namespace=dev-auth-service-microservices-namespace -- /bin/sh -c "echo date +%s%N > agent"
+
+        let podexec = false;
+        while (!podexec && operation.status !== "stopping") {
+          IO.sendEvent(
+            "out",
+            {
+              data: "init container app dependenices " + cmdid
+            },
+            cxt
+          );
+          try {
+            await exec(
+              [
+                "kubectl exec -i " +
+                  podid +
+                  " -c app --namespace=" +
+                  deploy.metadata.namespace +
+                  ' -- /bin/sh -c "echo "cmd:init:' +
+                  cmdid +
+                  '" > /tmp/agent-input" '
+              ],
+              {},
+              {},
+              cxt
+            );
+            podexec = true;
+          } catch (e) {
+            await wait(1000);
+          }
+        }
+
+        let done = false;
+        while (!done && operation.status !== "stopping") {
+          IO.sendEvent(
+            "out",
+            {
+              data: "Check agent result " + cmdid
+            },
+            cxt
+          );
+
+          try {
+            const catout = await exec(
+              [
+                "kubectl exec -i " +
+                  podid +
+                  " -c app --namespace=" +
+                  deploy.metadata.namespace +
+                  ' -- /bin/sh -c "cat /tmp/agent/output/' +
+                  cmdid +
+                  '" '
+              ],
+              {},
+              {},
+              cxt
+            );
+
+            done = true;
+          } catch (e) {
+            await wait(1000);
+          }
+        }
+      }
+    }*/
+
+    IO.sendEvent(
+      "info",
+      {
+        data: "Linked pods initialized!"
+      },
+      cxt
+    );
+
+    /*for (const podid of pods) {
+      const cmdid = uuidv4();
+      await exec(
+        [
+          "kubectl exec -i " +
+            podid +
+            " -c app --namespace=" +
+            deploy.metadata.namespace +
+            ' -- /bin/sh -c "echo "cmd:restart:' +
+            cmdid +
+            '" > /tmp/agent-input" '
+        ],
+        {},
+        {},
+        cxt
+      );
+    }*/
+
+    //kubectl logs -f my-pod -c my-container
 
     while (operation.status !== "stopping") {
       await wait(2500);
