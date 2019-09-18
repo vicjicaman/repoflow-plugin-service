@@ -2,20 +2,11 @@
 # yarn lockfile v1
 
 
-"@nebulario/core-config@1.70.2-master":
-  version "1.70.2-master"
-  resolved "https://registry.yarnpkg.com/@nebulario/core-config/-/core-config-1.70.2-master.tgz#9cc531ad43752cadce9f4be010def3c95b07bac2"
-  integrity sha512-hcnobQNndln/CVOAsjEGAFzjF+ka5aTRSyuZ1Ksi1y5tMxyB8XKvSg0YCNpkn+5foqdAhWiuRmiLvgyCbBtwog==
-  dependencies:
-    "@nebulario/core-json" "1.70.1-master"
-    "@nebulario/core-repository" "1.70.1-master"
-    babel-runtime "^6.26.0"
-    bluebird "^3.5.1"
-    child-process-promise "^2.2.1"
-    lodash "^4.17.4"
-    uuid "^3.3.2"
+"@nebulario/core-config@link:../core-config":
+  version "0.0.0"
+  uid ""
 
-"@nebulario/core-json@1.70.1-master", "@nebulario/core-json@^1.70.1-master":
+"@nebulario/core-json@1.70.1-master":
   version "1.70.1-master"
   resolved "https://registry.yarnpkg.com/@nebulario/core-json/-/core-json-1.70.1-master.tgz#7731a6a1d93b3887dde5566f45710116732dfdd8"
   integrity sha512-OrqH2P3JBHeZ3bll8o4IYZTwV5uR2UubLU4l+KAYK2kRIk96mnL+NScAWoTqm2v9PztN/RhCZRxtzqACYxYh2Q==

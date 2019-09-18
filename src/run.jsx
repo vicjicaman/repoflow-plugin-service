@@ -8,22 +8,32 @@ import { IO } from "@nebulario/core-plugin-request";
 import * as JsonUtils from "@nebulario/core-json";
 const uuidv4 = require("uuid/v4");
 
-const modify = (folder, compFile, func) => {
-  const inputPath = path.join(folder, "dist");
-  const outputPath = path.join(folder, "tmp");
+const copy = (source, target) => {
+  const content = fs.readFileSync(source, "utf8");
+  fs.writeFileSync(target, content, "utf8");
+};
 
-  if (!fs.existsSync(outputPath)) {
-    fs.mkdirSync(outputPath);
+const transformValue = (file, capture, transform) => {
+  const content = fs.readFileSync(file, "utf8");
+  const match = capture.exec(content);
+
+  if (match) {
+    const val = _.trim(match[1], "'");
+    const tranf = transform(val);
+
+    const mod = content.replace(new RegExp(val, "g"), tranf);
+
+    fs.writeFileSync(file, mod, "utf8");
   }
+};
 
-  const srcFile = path.join(inputPath, compFile);
-  const destFile = path.join(outputPath, compFile);
+const modify = (file, func) => {
+  const raw = fs.readFileSync(file, "utf8");
 
-  const raw = fs.readFileSync(srcFile, "utf8");
   const content = YAML.parse(raw);
   const mod = func(content);
 
-  fs.writeFileSync(destFile, YAML.stringify(mod, 10, 2), "utf8");
+  fs.writeFileSync(file, YAML.stringify(mod, 10, 2), "utf8");
 };
 
 const execToPod = async (namespace, podid, cmd, cxt) => {
@@ -69,7 +79,6 @@ const execToHost = async (cmd, cxt) => {
 };
 
 const copyToHost = (source, target, cxt) => {
-
   const copyCmd =
     'ssh -oStrictHostKeyChecking=no -i $(minikube ssh-key) docker@$(minikube ip) "rm -Rf ' +
     target +
@@ -169,7 +178,7 @@ export const listen = async (params, cxt) => {
     });
 
     if (depSrvPerformer) {
-      if (depSrvPerformer.linked.includes("run")) {
+      if (depSrvPerformer.linked) {
         const serviceLabel = _.find(depSrvPerformer.labels, lbl =>
           lbl.startsWith("service:")
         );
@@ -181,20 +190,17 @@ export const listen = async (params, cxt) => {
     }
   }
 
-
-  const paths = await execToHost("find /home/docker/instances/"+path.join(
-    instanceid,
-    "modules",
-    serviceid
-  )+" -type d -name " + performerid, cxt);
+  const paths = await execToHost(
+    "find /home/docker/instances/" +
+      path.join(instanceid, "modules", serviceid) +
+      " -type d -name " +
+      performerid,
+    cxt
+  );
 
   const pathLines = paths.stdout.trim().split("\n");
 
-
-
   for (const line of pathLines) {
-
-
     IO.sendEvent(
       "out",
       {
@@ -203,14 +209,12 @@ export const listen = async (params, cxt) => {
       cxt
     );
 
-
     await copyToHost(
       path.join(instanceFolder, "modules", performerid, "dist"),
-      path.join(line, "dist"), cxt
+      path.join(line, "dist"),
+      cxt
     );
   }
-
-
 
   for (const podid of pods) {
     const cmdid = uuidv4();
@@ -295,7 +299,7 @@ export const init = async (params, cxt) => {
         cxt
       );
 
-      if (depSrvPerformer.linked.includes("run")) {
+      if (depSrvPerformer.linked) {
         IO.sendEvent(
           "info",
           {
@@ -373,7 +377,7 @@ const mountPackages = (cont, performer, performers, currPath) => {
 
     if (depSrvPerformer) {
       if (
-        depSrvPerformer.linked.includes("run") &&
+        depSrvPerformer.linked &&
         depSrvPerformer.module.type === "npm"
       ) {
         const depCurrPath =
@@ -433,9 +437,15 @@ export const start = (params, cxt) => {
     const servicePath = path.join(distPath, "service.yaml");
     const serviceTmpPath = path.join(tmpPath, "service.yaml");
 
-    modify(folder, "service.yaml", content => {
-      content.metadata.namespace =
-        instanceid + "-" + content.metadata.namespace;
+    copy(servicePath, serviceTmpPath);
+
+    transformValue(
+      serviceTmpPath,
+      /namespace: (.+)/g,
+      val => instanceid + "-" + val
+    );
+
+    modify(serviceTmpPath, content => {
       return content;
     });
 
@@ -468,9 +478,21 @@ export const start = (params, cxt) => {
     const deploymentTmpPath = path.join(tmpPath, "deployment.yaml");
     let currentApp = null;
 
-    modify(folder, "deployment.yaml", content => {
+    copy(deploymentPath, deploymentTmpPath);
+
+    transformValue(
+      deploymentTmpPath,
+      /\s*name: HOST\s*value: (.+)/g,
+      val => instanceid + "-" + val
+    );
+    transformValue(
+      deploymentTmpPath,
+      /namespace: (.+)/g,
+      val => instanceid + "-" + val
+    );
+
+    modify(deploymentTmpPath, content => {
       const namespace = content.metadata.namespace;
-      content.metadata.namespace = instanceid + "-" + namespace;
 
       content.spec.template.spec.volumes =
         content.spec.template.spec.volumes || [];
@@ -500,7 +522,7 @@ export const start = (params, cxt) => {
             cxt
           );
 
-          if (depSrvPerformer.linked.includes("run")) {
+          if (depSrvPerformer.linked) {
             IO.sendEvent(
               "info",
               {
@@ -548,7 +570,7 @@ export const start = (params, cxt) => {
                     );
 
                     if (
-                      depSrvAppPerformer.linked.includes("run") &&
+                      depSrvAppPerformer.linked &&
                       depSrvAppPerformer.module.type === "npm"
                     ) {
                       IO.sendEvent(
@@ -667,7 +689,7 @@ export const start = (params, cxt) => {
                       cont.env,
                       ({ name }) => name === "HOST"
                     );
-                    if (HOST_ENV) {
+                    /*if (HOST_ENV) {
                       const host = HOST_ENV.value;
 
                       cont.env = cont.env.map(({ name, value }) => ({
@@ -677,9 +699,9 @@ export const start = (params, cxt) => {
                             ? value.replace(host, instanceid + "-" + host)
                             : value
                       }));
-                    }
+                    }*/
 
-                    cont.env = cont.env.map(({ name, value }) => ({
+                    /*cont.env = cont.env.map(({ name, value }) => ({
                       name,
                       value:
                         typeof value === "string"
@@ -688,7 +710,7 @@ export const start = (params, cxt) => {
                               instanceid + "-" + namespace
                             )
                           : value
-                    }));
+                    }));*/
 
                     cont.volumeMounts = cont.volumeMounts || [];
 
@@ -728,7 +750,7 @@ export const start = (params, cxt) => {
 
 
 
-        if (appPerformer.linked.includes("run")) {
+        if (appPerformer.linked) {
           IO.sendEvent("info", {
             data: " - App linked " + appPerformer.performerid
           }, cxt);
@@ -795,6 +817,13 @@ export const start = (params, cxt) => {
       })*/
       return content;
     });
+
+    const raw2 = fs.readFileSync(deploymentTmpPath, "utf8");
+    fs.writeFileSync(
+      deploymentTmpPath,
+      raw2.replace(new RegExp("- yes", "g"), "- 'yes'"),
+      "utf8"
+    );
 
     const igosut = await exec(
       ["kubectl apply -f " + deploymentTmpPath],
@@ -906,6 +935,7 @@ export const start = (params, cxt) => {
       cxt
     );
 
+    IO.sendEvent("done", {}, cxt);
     /*for (const podid of pods) {
       const cmdid = uuidv4();
       await exec(
