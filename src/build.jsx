@@ -3,8 +3,14 @@ import fs from "fs-extra";
 import path from "path";
 import YAML from "yamljs";
 import { exec, spawn, wait } from "@nebulario/core-process";
-import { Operation, IO, Watcher } from "@nebulario/core-plugin-request";
+import {
+  Operation,
+  IO,
+  Watcher,
+  Performer
+} from "@nebulario/core-plugin-request";
 import * as Config from "@nebulario/core-config";
+import * as Cluster from "@nebulario/core-cluster";
 import * as JsonUtils from "@nebulario/core-json";
 
 export const clear = async (params, cxt) => {
@@ -19,29 +25,15 @@ export const clear = async (params, cxt) => {
     }
   } = params;
 
-  if (type !== "instanced") {
-    throw new Error("PERFORMER_NOT_INSTANCED");
-  }
-
-  try {
+  if (type === "instanced") {
     await Config.clear(folder);
-  } catch (e) {
-    IO.sendEvent(
-      "error",
-      {
-        data: e.toString()
-      },
-      cxt
-    );
-    throw e;
   }
-
-  return "Configuration cleared";
 };
 
 export const init = async (params, cxt) => {
   const {
     performers,
+    performer,
     performer: {
       dependents,
       type,
@@ -53,69 +45,30 @@ export const init = async (params, cxt) => {
     }
   } = params;
 
-  if (type !== "instanced") {
-    throw new Error("PERFORMER_NOT_INSTANCED");
-  }
+  if (type === "instanced") {
+    Performer.link(performer, performers, {
+      onLinked: depPerformer => {
+        if (depPerformer.module.type === "config") {
+          IO.sendEvent(
+            "info",
+            {
+              data: depPerformer.performerid + " config linked!"
+            },
+            cxt
+          );
 
-  for (const depSrv of dependents) {
-    const depSrvPerformer = _.find(performers, {
-      performerid: depSrv.moduleid
-    });
-
-    if (depSrvPerformer) {
-      IO.sendEvent(
-        "out",
-        {
-          data: "Performing dependent found " + depSrv.moduleid
-        },
-        cxt
-      );
-
-      if (depSrvPerformer.linked && depSrvPerformer.module.type === "config") {
-        IO.sendEvent(
-          "info",
-          {
-            data: " - Linked " + depSrv.moduleid
-          },
-          cxt
-        );
-
-        JsonUtils.sync(folder, {
-          filename: "config.json",
-          path: "dependencies." + depSrv.moduleid + ".version",
-          version: "file:./../" + depSrv.moduleid
-        });
-      } else {
-        IO.sendEvent(
-          "warning",
-          {
-            data: " - Not linked " + depSrv.moduleid
-          },
-          cxt
-        );
+          Config.link(folder, depPerformer.performerid);
+        }
       }
-    }
-  }
-
-  try {
+    });
     await Config.init(folder);
-  } catch (e) {
-    IO.sendEvent(
-      "error",
-      {
-        data: e.toString()
-      },
-      cxt
-    );
-    throw e;
   }
-
-  return "Config service initialized";
 };
 
 export const start = (params, cxt) => {
   const {
     performers,
+    performer,
     performer: {
       dependents,
       type,
@@ -127,119 +80,44 @@ export const start = (params, cxt) => {
     }
   } = params;
 
-  if (type !== "instanced") {
-    throw new Error("PERFORMER_NOT_INSTANCED");
-  }
+  if (type === "instanced") {
+    const configPath = path.join(folder, "config.json");
+    const servicePath = path.join(folder, "service.yaml");
+    const deploymentPath = path.join(folder, "deployment.yaml");
 
-  const configPath = path.join(folder, "config.json");
-  const servicePath = path.join(folder, "service.yaml");
-  const deploymentPath = path.join(folder, "deployment.yaml");
+    Performer.sendLinkStateEvents(performer, performers, cxt);
 
-  for (const depSrv of dependents) {
-    const depSrvPerformer = _.find(performers, {
-      performerid: depSrv.moduleid
-    });
+    const startOp = async (operation, cxt) => {
+      const { operationid } = operation;
 
-    if (depSrvPerformer) {
-      IO.sendEvent(
-        "out",
-        {
-          data: "Performing dependent found " + depSrv.moduleid
-        },
-        cxt
+      build(operation, params, cxt);
+
+      const watchers = Watcher.multiple(
+        [configPath, servicePath, deploymentPath],
+        changedPath => {
+          IO.sendEvent(
+            "warning",
+            {
+              data: changedPath + " changed..."
+            },
+            cxt
+          );
+          build(operation, params, cxt);
+        }
       );
 
-      if (depSrvPerformer.linked) {
-        IO.sendEvent(
-          "info",
-          {
-            data: " - Linked " + depSrv.moduleid
-          },
-          cxt
-        );
-      } else {
-        IO.sendEvent(
-          "warning",
-          {
-            data: " - Not linked " + depSrv.moduleid
-          },
-          cxt
-        );
+      while (operation.status !== "stopping") {
+        await wait(100); //wait(2500);
       }
-    }
+
+      Watcher.stop(watchers);
+    };
+
+    return {
+      promise: startOp,
+      process: null
+    };
   }
-
-  const watcher = async (operation, cxt) => {
-    const { operationid } = operation;
-
-    IO.sendEvent(
-      "out",
-      {
-        operationid,
-        data: "Watching config changes for " + configPath
-      },
-      cxt
-    );
-
-    build(operation, params, cxt);
-
-    const watcherConfig = Watcher.watch(configPath, () => {
-      IO.sendEvent(
-        "out",
-        {
-          operationid,
-          data: "config.json changed..."
-        },
-        cxt
-      );
-      build(operation, params, cxt);
-    });
-    const watcherNamespace = Watcher.watch(servicePath, () => {
-      IO.sendEvent(
-        "out",
-        {
-          operationid,
-          data: "service.yaml changed..."
-        },
-        cxt
-      );
-      build(operation, params, cxt);
-    });
-    const watcherIngress = Watcher.watch(deploymentPath, () => {
-      IO.sendEvent(
-        "out",
-        {
-          operationid,
-          data: "deployment.yaml changed..."
-        },
-        cxt
-      );
-      build(operation, params, cxt);
-    });
-
-    while (operation.status !== "stopping") {
-      await wait(2500);
-    }
-
-    watcherConfig.close();
-    watcherIngress.close();
-    watcherNamespace.close();
-    await wait(100);
-
-    IO.sendEvent(
-      "stopped",
-      {
-        operationid,
-        data: ""
-      },
-      cxt
-    );
-  };
-
-  return {
-    promise: watcher,
-    process: null
-  };
 };
 
 const build = (operation, params, cxt) => {
@@ -267,35 +145,18 @@ const build = (operation, params, cxt) => {
     );
 
     Config.build(folder);
+    const values = Config.load(folder);
 
-    const config = JsonUtils.load(path.join(folder, "config.json"));
-    const values = Config.values(folder, config);
+    const src = path.join(folder, "");
+    const dest = path.join(folder, "dist");
 
-    const filesToCopy = ["deployment.yaml", "service.yaml"];
-    const outputPath = path.join(folder, "dist");
-
-    if (!fs.existsSync(outputPath)) {
-      fs.mkdirSync(outputPath);
-    }
-
-    for (const compFile of filesToCopy) {
-      const srcFile = path.join(folder, compFile);
-      const destFile = path.join(outputPath, compFile);
-
-      const raw = fs.readFileSync(srcFile, "utf8");
-      const convert = Config.replace(raw, values);
-      fs.writeFileSync(destFile, convert, "utf8");
-
-      postProcessEnv(destFile);
-
-      const raw2 = fs.readFileSync(destFile, "utf8");
-      fs.writeFileSync(destFile, raw2.replace(new RegExp("- yes", "g"), "- 'yes'"), "utf8");
-    }
+    Cluster.Config.configure("service.yaml", src, dest, values);
+    Cluster.Config.configure("deployment.yaml", src, dest, values);
 
     IO.sendEvent(
       "done",
       {
-        data: "Config generated: dist/config.json"
+        data: "Service generated!"
       },
       cxt
     );
@@ -309,24 +170,4 @@ const build = (operation, params, cxt) => {
       cxt
     );
   }
-};
-
-const postProcessEnv = file => {
-  const ent = JsonUtils.load(file, true);
-
-  if (_.get(ent, "spec.template.spec.containers", null)) {
-    ent.spec.template.spec.containers = ent.spec.template.spec.containers.map(
-      cont => {
-        if (cont.env) {
-          cont.env = cont.env.map(entry => {
-            entry.value = entry.value.toString();
-            return entry;
-          });
-        }
-        return cont;
-      }
-    );
-  }
-
-  JsonUtils.save(file, ent, true);
 };
