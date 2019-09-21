@@ -79,91 +79,105 @@ const getLinkedServiceApp = (performer, performers) => {
   return appPerf;
 };
 
+const restartPodsApp = async ({ performerid }, params, cxt) => {
+  const {
+    performers,
+    performer,
+    performer: {
+      type,
+      code: {
+        paths: {
+          absolute: { folder }
+        }
+      },
+      dependents,
+      module: { dependencies }
+    },
+    instance: {
+      instanceid,
+      paths: {
+        absolute: { folder: instanceFolder }
+      }
+    }
+  } = params;
+
+  const tmpPath = path.join(folder, "tmp");
+  const deploymentTmpPath = path.join(tmpPath, "deployment.yaml");
+  const deploy = JsonUtils.load(deploymentTmpPath, true);
+
+  const pods = await Cluster.Control.getDeploymentPods(
+    deploy.metadata.namespace,
+    deploy.metadata.name,
+    cxt
+  );
+
+  IO.sendEvent(
+    "info",
+    {
+      data: "Pods " + pods
+    },
+    cxt
+  );
+
+  let servicePerf = getLinkedServiceContainer(performer, performers);
+
+  if (servicePerf) {
+    const paths = await Cluster.Minikube.execToHost(
+      "find /home/docker/instances/" +
+        path.join(instanceid, "modules", servicePerf.performerid) +
+        " -type d -name " +
+        performerid,
+      cxt
+    );
+
+    const pathLines = paths.stdout.trim().split("\n");
+
+    for (const line of pathLines) {
+      await Cluster.Minikube.copyToHost(
+        path.join(instanceFolder, "modules", performerid, "dist"),
+        path.join(line, "dist"),
+        cxt
+      );
+    }
+
+    for (const podid of pods) {
+      const cmdid = uuidv4();
+
+      IO.sendEvent(
+        "out",
+        {
+          data: "Restarting inner container app " + podid
+        },
+        cxt
+      );
+
+      await Cluster.Control.execToPod(
+        deploy.metadata.namespace,
+        podid,
+        'echo "cmd:restart:' + cmdid + '" > /tmp/agent-input',
+        cxt
+      );
+    }
+  }
+};
+
 export const listen = async (params, cxt) => {
   const {
-    performerid,
+    performerid, // TRIGGER DEP
     operation: {
+      params: opParams,
       params: {
-        performers,
-        performer,
-        performer: {
-          type,
-          code: {
-            paths: {
-              absolute: { folder }
-            }
-          },
-          dependents,
-          module: { dependencies }
-        },
-        instance: {
-          instanceid,
-          paths: {
-            absolute: { folder: instanceFolder }
-          }
-        }
+        performer: { type },
+        performers
       }
     }
   } = params;
 
   if (type === "instanced") {
-    const tmpPath = path.join(folder, "tmp");
-    const deploymentTmpPath = path.join(tmpPath, "deployment.yaml");
-    const deploy = JsonUtils.load(deploymentTmpPath, true);
+    const triggerPerf = Performer.find(performerid, performers);
 
-    const pods = await Cluster.Control.getDeploymentPods(
-      deploy.metadata.namespace,
-      deploy.metadata.name,
-      cxt
-    );
-
-    IO.sendEvent(
-      "info",
-      {
-        data: "Pods " + pods
-      },
-      cxt
-    );
-
-    let servicePerf = getLinkedServiceContainer(performer, performers);
-
-    if (servicePerf) {
-      const paths = await Cluster.Minikube.execToHost(
-        "find /home/docker/instances/" +
-          path.join(instanceid, "modules", servicePerf.performerid) +
-          " -type d -name " +
-          performerid,
-        cxt
-      );
-
-      const pathLines = paths.stdout.trim().split("\n");
-
-      for (const line of pathLines) {
-        await Cluster.Minikube.copyToHost(
-          path.join(instanceFolder, "modules", performerid, "dist"),
-          path.join(line, "dist"),
-          cxt
-        );
-      }
-
-      for (const podid of pods) {
-        const cmdid = uuidv4();
-
-        IO.sendEvent(
-          "out",
-          {
-            data: "Restarting inner container app " + podid
-          },
-          cxt
-        );
-
-        await Cluster.Control.execToPod(
-          deploy.metadata.namespace,
-          podid,
-          'echo "cmd:restart:' + cmdid + '" > /tmp/agent-input',
-          cxt
-        );
-      }
+    if (triggerPerf && triggerPerf.module.type === "npm") {
+      await restartPodsApp(triggerPerf, opParams, cxt);
     }
   }
 };
@@ -196,8 +210,7 @@ export const init = async (params, cxt) => {
       IO.sendEvent(
         "info",
         {
-          data:
-            "Initialize instance module... " + servicePerf.module.moduleid
+          data: "Initialize instance module... " + servicePerf.module.moduleid
         },
         cxt
       );
@@ -237,6 +250,7 @@ export const start = (params, cxt) => {
   const distPath = path.join(folder, "dist");
 
   const startOp = async (operation, cxt) => {
+    let depSrvAppPerformer = null;
     IO.sendEvent(
       "out",
       {
@@ -321,10 +335,7 @@ export const start = (params, cxt) => {
             const [imgName, imgVer] = currCont.image.split(":");
             currCont.image = imgName + ":linked";
 
-            const depSrvAppPerformer = getLinkedServiceApp(
-              servicePerf,
-              performers
-            );
+            depSrvAppPerformer = getLinkedServiceApp(servicePerf, performers);
 
             if (depSrvAppPerformer) {
               IO.sendEvent(
@@ -409,6 +420,10 @@ export const start = (params, cxt) => {
       },
       cxt
     );
+
+    if (depSrvAppPerformer) {
+      await restartPodsApp(depSrvAppPerformer, params, cxt);
+    }
 
     IO.sendEvent("done", {}, cxt);
 
