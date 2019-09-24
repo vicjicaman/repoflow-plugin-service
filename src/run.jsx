@@ -79,7 +79,105 @@ const getLinkedServiceApp = (performer, performers) => {
   return appPerf;
 };
 
-const restartPodsApp = async ({ performerid }, params, cxt) => {
+const updatePerformerDist = async (
+  { performerid, dependents },
+  params,
+  cxt
+) => {
+  const {
+    instanceid,
+    instanceFolder,
+    basePerformer,
+    recursive = false,
+    performers,
+    updated
+  } = params;
+
+  if (updated.includes(performerid)) {
+    return;
+  }
+
+  updated.push(performerid);
+
+  IO.sendEvent(
+    "info",
+    {
+      data: "Update dependency " + performerid
+    },
+    cxt
+  );
+
+  const paths = await Cluster.Minikube.execToHost(
+    "find /home/docker/instances/" +
+      path.join(instanceid, "modules", basePerformer.performerid) +
+      " -type d -name " +
+      performerid,
+    cxt
+  );
+
+  const pathLines = paths.stdout.trim().split("\n");
+
+  /*IO.sendEvent(
+    "out",
+    {
+      data: "Host locations: " + JSON.stringify(pathLines, null, 2)
+    },
+    cxt
+  );*/
+
+  for (const line of pathLines) {
+    await Cluster.Minikube.copyToHost(
+      {
+        path: path.join(instanceFolder, "modules", performerid, "dist"),
+        type: "folder"
+      },
+      path.join(line, "dist"),
+      cxt
+    );
+  }
+
+  if (recursive) {
+    if (dependents.length > 0) {
+      IO.sendEvent(
+        "out",
+        {
+          data: "Update dependents " + JSON.stringify(dependents)
+        },
+        cxt
+      );
+    }
+
+    for (const depSrv of dependents) {
+      const depSrvPerformer = _.find(performers, {
+        performerid: depSrv.moduleid
+      });
+
+      /*IO.sendEvent(
+        "out",
+        {
+          data:
+            "DEPENDENT : " +
+            depSrv.moduleid +
+            "   " +
+            JSON.stringify(performers.map(({ performerid }) => performerid))
+        },
+        cxt
+      );*/
+
+      if (depSrvPerformer) {
+        if (depSrvPerformer.linked) {
+          await updatePerformerDist(depSrvPerformer, params, cxt);
+        }
+      }
+    }
+  }
+};
+
+const restartPodsApp = async (
+  triggerPerf,
+  { params, recursive, updated },
+  cxt
+) => {
   const {
     performers,
     performer,
@@ -122,20 +220,17 @@ const restartPodsApp = async ({ performerid }, params, cxt) => {
   let servicePerf = getLinkedServiceContainer(performer, performers);
 
   if (servicePerf) {
-    const paths = await Cluster.Minikube.execToHost(
-      "find /home/docker/instances/" +
-        path.join(instanceid, "modules", servicePerf.performerid) +
-        " -type d -name " +
-        performerid,
-      cxt
-    );
-
-    const pathLines = paths.stdout.trim().split("\n");
-
-    for (const line of pathLines) {
-      await Cluster.Minikube.copyToHost(
-        path.join(instanceFolder, "modules", performerid, "dist"),
-        path.join(line, "dist"),
+    if (triggerPerf) {
+      await updatePerformerDist(
+        triggerPerf,
+        {
+          instanceFolder,
+          recursive,
+          basePerformer: servicePerf,
+          performers,
+          instanceid,
+          updated
+        },
         cxt
       );
     }
@@ -177,7 +272,11 @@ export const listen = async (params, cxt) => {
     const triggerPerf = Performer.find(performerid, performers);
 
     if (triggerPerf && triggerPerf.module.type === "npm") {
-      await restartPodsApp(triggerPerf, opParams, cxt);
+      await restartPodsApp(
+        triggerPerf,
+        { params: opParams, recursive: false, updated: [] },
+        cxt
+      );
     }
   }
 };
@@ -216,7 +315,14 @@ export const init = async (params, cxt) => {
       );
 
       await Cluster.Minikube.copyToHost(
-        path.join(instanceFolder, "modules", servicePerf.module.moduleid),
+        {
+          path: path.join(
+            instanceFolder,
+            "modules",
+            servicePerf.module.moduleid
+          ),
+          type: "folder"
+        },
         "/home/docker/instances/" +
           instanceid +
           "/modules/" +
@@ -422,7 +528,11 @@ export const start = (params, cxt) => {
     );
 
     if (depSrvAppPerformer) {
-      await restartPodsApp(depSrvAppPerformer, params, cxt);
+      await restartPodsApp(
+        depSrvAppPerformer,
+        { params, recursive: true, updated: [] },
+        cxt
+      );
     }
 
     IO.sendEvent("done", {}, cxt);
