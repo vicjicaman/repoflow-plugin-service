@@ -2,13 +2,33 @@
 # yarn lockfile v1
 
 
-"@nebulario/core-cluster@link:../core-cluster":
-  version "0.0.0"
-  uid ""
+"@nebulario/core-cluster@1.70.5-runtime-reference-prod":
+  version "1.70.5-runtime-reference-prod"
+  resolved "https://registry.yarnpkg.com/@nebulario/core-cluster/-/core-cluster-1.70.5-runtime-reference-prod.tgz#fa9645189ae76c369e5c5776c50f1f4f99746c77"
+  integrity sha512-GcPnrrj6jzSF56smuoWvs8saa8O9Y5aF78Hy6IjjRp8nD8TPr/UqLDv+kUnVurW3GH2bLJTVhy2w3NHUYXg6vg==
+  dependencies:
+    "@nebulario/core-config" "1.70.5-runtime-reference-prod"
+    "@nebulario/core-json" "1.70.1-master"
+    "@nebulario/core-process" "1.70.1-master"
+    "@nebulario/core-repository" "1.70.1-master"
+    babel-runtime "^6.26.0"
+    bluebird "^3.5.1"
+    child-process-promise "^2.2.1"
+    lodash "^4.17.4"
+    uuid "^3.3.3"
 
-"@nebulario/core-config@link:../core-config":
-  version "0.0.0"
-  uid ""
+"@nebulario/core-config@1.70.5-runtime-reference-prod":
+  version "1.70.5-runtime-reference-prod"
+  resolved "https://registry.yarnpkg.com/@nebulario/core-config/-/core-config-1.70.5-runtime-reference-prod.tgz#9e8771109babaec145e2e25f2ba9eb14e58b7726"
+  integrity sha512-0PEl5RgUb19KoUBoAdhEyMjJOBkiIeGNcfWJzkxSewQf50PxIW2qrWzJuhuS7ioYL5lJ62iOkH0FERr2c1gffw==
+  dependencies:
+    "@nebulario/core-json" "1.70.1-master"
+    "@nebulario/core-repository" "1.70.1-master"
+    babel-runtime "^6.26.0"
+    bluebird "^3.5.1"
+    child-process-promise "^2.2.1"
+    lodash "^4.17.4"
+    uuid "^3.3.2"
 
 "@nebulario/core-json@1.70.1-master":
   version "1.70.1-master"
@@ -17,9 +37,18 @@
   dependencies:
     yamljs "^0.3.0"
 
-"@nebulario/core-plugin-request@link:../core-plugin-request":
-  version "0.0.0"
-  uid ""
+"@nebulario/core-plugin-request@1.70.5-runtime-reference-prod":
+  version "1.70.5-runtime-reference-prod"
+  resolved "https://registry.yarnpkg.com/@nebulario/core-plugin-request/-/core-plugin-request-1.70.5-runtime-reference-prod.tgz#983b61a6d5cbb4488c129a4d5806598d671f468e"
+  integrity sha512-7Cod3lmAC9lR00M7FcnWMbUkCv8Kj7ymZKzl3BltYdHIcVtTfQZc/WrDl2HpyBJCalixclI4QtVN6fdrCiNBFg==
+  dependencies:
+    "@nebulario/core-process" "1.70.1-master"
+    axios "^0.19.0"
+    babel-runtime "^6.26.0"
+    bluebird "^3.5.1"
+    md5 "^2.2.1"
+    tree-kill "^1.2.0"
+    yamljs "^0.3.0"
 
 "@nebulario/core-process@1.70.1-master":
   version "1.70.1-master"
@@ -4092,6 +4121,11 @@ uuid@^3.2.1:
 uuid@^3.3.2:
   version "3.3.2"
   resolved "https://registry.yarnpkg.com/uuid/-/uuid-3.3.2.tgz#1b4af4955eb3077c501c23872fc6513811587131"
+
+uuid@^3.3.3:
+  version "3.3.3"
+  resolved "https://registry.yarnpkg.com/uuid/-/uuid-3.3.3.tgz#4568f0216e78760ee1dbf3a4d2cf53e224112866"
+  integrity sha512-pW0No1RGHgzlpHJO1nsVrHKpOEIxkGg1xB+v0ZmdNH5OAeAwzAVrCnI2/6Mtx+Uys6iaylxa+D3g4j63IKKjSQ==
 
 v8flags@^2.1.1:
   version "2.1.1"
