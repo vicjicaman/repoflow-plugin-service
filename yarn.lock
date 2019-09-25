@@ -2,12 +2,12 @@
 # yarn lockfile v1
 
 
-"@nebulario/core-cluster@1.70.5-runtime-reference-prod":
-  version "1.70.5-runtime-reference-prod"
-  resolved "https://registry.yarnpkg.com/@nebulario/core-cluster/-/core-cluster-1.70.5-runtime-reference-prod.tgz#fa9645189ae76c369e5c5776c50f1f4f99746c77"
-  integrity sha512-GcPnrrj6jzSF56smuoWvs8saa8O9Y5aF78Hy6IjjRp8nD8TPr/UqLDv+kUnVurW3GH2bLJTVhy2w3NHUYXg6vg==
+"@nebulario/core-cluster@1.70.0-master":
+  version "1.70.0-master"
+  resolved "https://registry.yarnpkg.com/@nebulario/core-cluster/-/core-cluster-1.70.0-master.tgz#531dc8b81afb85563222fb73136331112aa07e5b"
+  integrity sha512-tc+N59CFJnOgpsaAKLAZ+PkggHoNRwihs/VDm8KvFAzW9en0a9tGz1OBZQii1Hunv41XwqL/Shk3/++GlmZRlA==
   dependencies:
-    "@nebulario/core-config" "1.70.5-runtime-reference-prod"
+    "@nebulario/core-config" "1.70.3-master"
     "@nebulario/core-json" "1.70.1-master"
     "@nebulario/core-process" "1.70.1-master"
     "@nebulario/core-repository" "1.70.1-master"
@@ -17,10 +17,10 @@
     lodash "^4.17.4"
     uuid "^3.3.3"
 
-"@nebulario/core-config@1.70.5-runtime-reference-prod":
-  version "1.70.5-runtime-reference-prod"
-  resolved "https://registry.yarnpkg.com/@nebulario/core-config/-/core-config-1.70.5-runtime-reference-prod.tgz#9e8771109babaec145e2e25f2ba9eb14e58b7726"
-  integrity sha512-0PEl5RgUb19KoUBoAdhEyMjJOBkiIeGNcfWJzkxSewQf50PxIW2qrWzJuhuS7ioYL5lJ62iOkH0FERr2c1gffw==
+"@nebulario/core-config@1.70.3-master":
+  version "1.70.3-master"
+  resolved "https://registry.yarnpkg.com/@nebulario/core-config/-/core-config-1.70.3-master.tgz#49127457a658530125e81905b89618993b59021b"
+  integrity sha512-V0NCU3x8OVlTtyPMtTp3I24320j4pafpdzTOqNF4fzoMOHnqBM86di9J1DVUgCphL1RRNfA3st9WsNza4Xv9/A==
   dependencies:
     "@nebulario/core-json" "1.70.1-master"
     "@nebulario/core-repository" "1.70.1-master"
@@ -37,10 +37,10 @@
   dependencies:
     yamljs "^0.3.0"
 
-"@nebulario/core-plugin-request@1.70.5-runtime-reference-prod":
-  version "1.70.5-runtime-reference-prod"
-  resolved "https://registry.yarnpkg.com/@nebulario/core-plugin-request/-/core-plugin-request-1.70.5-runtime-reference-prod.tgz#983b61a6d5cbb4488c129a4d5806598d671f468e"
-  integrity sha512-7Cod3lmAC9lR00M7FcnWMbUkCv8Kj7ymZKzl3BltYdHIcVtTfQZc/WrDl2HpyBJCalixclI4QtVN6fdrCiNBFg==
+"@nebulario/core-plugin-request@1.70.9-master":
+  version "1.70.9-master"
+  resolved "https://registry.yarnpkg.com/@nebulario/core-plugin-request/-/core-plugin-request-1.70.9-master.tgz#fc921896d235145f24d22f22813197fce7974ab1"
+  integrity sha512-Hm8NsvQlGiqo6GxsHDhtFaNlIJzHdTuV0Lyv9bP1ulxkkMdandFB0ozdFbRMm+hHhpHXpHZ0bMGO2627WPTUTw==
   dependencies:
     "@nebulario/core-process" "1.70.1-master"
     axios "^0.19.0"
