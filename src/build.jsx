@@ -111,6 +111,14 @@ export const start = (params, cxt) => {
       }
 
       Watcher.stop(watchers);
+
+      IO.sendEvent(
+        "warning",
+        {
+          data: "stopped!"
+        },
+        cxt
+      );
     };
 
     return {
