@@ -14,6 +14,8 @@ import {publish} from './publish';
     },
     run: {
       listen: Run.listen,
+      init: Run.init,
+      clear: Run.clear,
       start: Run.start
     },
     build: {

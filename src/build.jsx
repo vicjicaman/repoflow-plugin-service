@@ -1,240 +1,181 @@
-import _ from 'lodash'
-import fs from 'fs-extra'
-import path from 'path'
-import YAML from 'yamljs';
-import {
-  exec,
-  spawn,
-  wait
-} from '@nebulario/core-process';
+import _ from "lodash";
+import fs from "fs-extra";
+import path from "path";
+import YAML from "yamljs";
+import { exec, spawn, wait } from "@nebulario/core-process";
 import {
   Operation,
   IO,
-  Watcher
-} from '@nebulario/core-plugin-request';
-
-import * as Config from '@nebulario/core-config';
-import * as JsonUtils from '@nebulario/core-json'
-
-
+  Watcher,
+  Performer
+} from "@nebulario/core-plugin-request";
+import * as Config from "@nebulario/core-config";
+import * as Cluster from "@nebulario/core-cluster";
+import * as JsonUtils from "@nebulario/core-json";
 
 export const clear = async (params, cxt) => {
-
   const {
     performer: {
       type,
       code: {
         paths: {
-          absolute: {
-            folder
-          }
+          absolute: { folder }
         }
       }
     }
   } = params;
 
-  if (type !== "instanced") {
-    throw new Error("PERFORMER_NOT_INSTANCED");
-  }
-
-  try {
+  if (type === "instanced") {
     await Config.clear(folder);
-  } catch (e) {
-    IO.sendEvent("error", {
-      data: e.toString()
-    }, cxt);
-    throw e;
   }
-
-  return "Configuration cleared";
-}
-
-
+};
 
 export const init = async (params, cxt) => {
-
   const {
+    performers,
+    performer,
     performer: {
+      dependents,
       type,
       code: {
         paths: {
-          absolute: {
-            folder
-          }
+          absolute: { folder }
         }
       }
     }
   } = params;
 
-  if (type !== "instanced") {
-    throw new Error("PERFORMER_NOT_INSTANCED");
-  }
+  if (type === "instanced") {
+    Performer.link(performer, performers, {
+      onLinked: depPerformer => {
+        if (depPerformer.module.type === "config") {
+          IO.sendEvent(
+            "info",
+            {
+              data: depPerformer.performerid + " config linked!"
+            },
+            cxt
+          );
 
-  try {
+          Config.link(folder, depPerformer.performerid);
+        }
+      }
+    });
     await Config.init(folder);
-  } catch (e) {
-    IO.sendEvent("error", {
-      data: e.toString()
-    }, cxt);
-    throw e;
   }
-
-  return "Config service initialized";
-}
+};
 
 export const start = (params, cxt) => {
-
   const {
+    performers,
+    performer,
     performer: {
+      dependents,
       type,
       code: {
         paths: {
-          absolute: {
-            folder
-          }
+          absolute: { folder }
         }
       }
     }
   } = params;
 
-  if (type !== "instanced") {
-    throw new Error("PERFORMER_NOT_INSTANCED");
+  if (type === "instanced") {
+    const configPath = path.join(folder, "config.json");
+    const servicePath = path.join(folder, "service.yaml");
+    const deploymentPath = path.join(folder, "deployment.yaml");
+
+    Performer.sendLinkStateEvents(performer, performers, cxt);
+
+    const startOp = async (operation, cxt) => {
+      const { operationid } = operation;
+
+      build(operation, params, cxt);
+
+      const watchers = Watcher.multiple(
+        [configPath, servicePath, deploymentPath],
+        changedPath => {
+          IO.sendEvent(
+            "warning",
+            {
+              data: changedPath + " changed..."
+            },
+            cxt
+          );
+          build(operation, params, cxt);
+        }
+      );
+
+      while (operation.status !== "stopping") {
+        await wait(100); //wait(2500);
+      }
+
+      Watcher.stop(watchers);
+
+      IO.sendEvent(
+        "warning",
+        {
+          data: "stopped!"
+        },
+        cxt
+      );
+    };
+
+    return {
+      promise: startOp,
+      process: null
+    };
   }
-
-
-  const configPath = path.join(folder, "config.json");
-  const servicePath = path.join(folder, "service.yaml");
-  const deploymentPath = path.join(folder, "deployment.yaml");
-
-
-  const watcher = async (operation, cxt) => {
-
-    const {
-      operationid
-    } = operation;
-
-    await wait(100);
-
-    IO.sendEvent("out", {
-      operationid,
-      data: "Watching config changes for " + configPath
-    }, cxt);
-
-    await build(operation, params, cxt);
-
-    const watcherConfig = Watcher.watch(configPath, () => {
-      IO.sendEvent("out", {
-        operationid,
-        data: "config.json changed..."
-      }, cxt);
-      build(operation, params, cxt);
-    });
-    const watcherNamespace = Watcher.watch(servicePath, () => {
-      IO.sendEvent("out", {
-        operationid,
-        data: "service.yaml changed..."
-      }, cxt);
-      build(operation, params, cxt);
-    });
-    const watcherIngress = Watcher.watch(deploymentPath, () => {
-      IO.sendEvent("out", {
-        operationid,
-        data: "deployment.yaml changed..."
-      }, cxt);
-      build(operation, params, cxt);
-    });
-
-
-    while (operation.status !== "stopping") {
-      await wait(2500);
-    }
-
-    watcherConfig.close();
-    watcherIngress.close();
-    watcherNamespace.close();
-    await wait(100);
-
-    IO.sendEvent("stopped", {
-      operationid,
-      data: ""
-    }, cxt);
-  }
-
-
-  return {
-    promise: watcher,
-    process: null
-  };
-}
-
-
-
+};
 
 const build = (operation, params, cxt) => {
-
   const {
     performer: {
       type,
       code: {
         paths: {
-          absolute: {
-            folder
-          }
+          absolute: { folder }
         }
       }
     }
   } = params;
 
-  const {
-    operationid
-  } = operation;
+  const { operationid } = operation;
 
   try {
-
-    IO.sendEvent("out", {
-      operationid,
-      data: "Start building config..."
-    }, cxt);
+    IO.sendEvent(
+      "out",
+      {
+        operationid,
+        data: "Start building config..."
+      },
+      cxt
+    );
 
     Config.build(folder);
+    const values = Config.load(folder);
 
-    IO.sendEvent("done", {
-      operationid,
-      data: "Config generated: dist/config.json"
-    }, cxt);
+    const src = path.join(folder, "");
+    const dest = path.join(folder, "dist");
 
+    Cluster.Config.configure("service.yaml", src, dest, values);
+    Cluster.Config.configure("deployment.yaml", src, dest, values);
 
-    const config = JsonUtils.load(path.join(folder, "config.json"));
-    const values = Config.values(folder, config);
-
-    const filesToCopy = ["deployment.yaml", "service.yaml"];
-    const outputPath = path.join(folder, "dist");
-
-    if (!fs.existsSync(outputPath)) {
-      fs.mkdirSync(outputPath);
-    }
-
-    for (const compFile of filesToCopy) {
-      const srcFile = path.join(folder, compFile);
-      const destFile = path.join(outputPath, compFile);
-
-      const raw = fs.readFileSync(srcFile, "utf8");
-      const convert = Config.replace(raw, values);
-      fs.writeFileSync(destFile, convert, "utf8");
-    }
-
-
-    IO.sendEvent("done", {
-      operationid,
-      data: JSON.stringify(values, null, 2)
-    }, cxt);
-
-
+    IO.sendEvent(
+      "done",
+      {
+        data: "Service generated!"
+      },
+      cxt
+    );
   } catch (e) {
-    IO.sendEvent("error", {
-      operationid,
-      data: e.toString()
-    }, cxt);
+    IO.sendEvent(
+      "error",
+      {
+        operationid,
+        data: e.toString()
+      },
+      cxt
+    );
   }
-
-}
+};

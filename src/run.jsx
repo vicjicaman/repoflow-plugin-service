@@ -1,90 +1,183 @@
-import _ from 'lodash'
-import fs from 'fs-extra'
-import path from 'path'
-import YAML from 'yamljs';
-import {
-  spawn,
-  wait,
-  exec
-} from '@nebulario/core-process';
-import {
-  IO
-} from '@nebulario/core-plugin-request';
-import * as JsonUtils from '@nebulario/core-json'
+import _ from "lodash";
+import fs from "fs-extra";
+import path from "path";
+import YAML from "yamljs";
+import { spawn, wait, exec } from "@nebulario/core-process";
+import { execSync } from "child_process";
+import { IO, Performer } from "@nebulario/core-plugin-request";
+import * as JsonUtils from "@nebulario/core-json";
+import * as Cluster from "@nebulario/core-cluster";
+const uuidv4 = require("uuid/v4");
 
-
-const modify = (folder, compFile, func) => {
-  const inputPath = path.join(folder, "dist");
-  const outputPath = path.join(folder, "tmp");
-
-  if (!fs.existsSync(outputPath)) {
-    fs.mkdirSync(outputPath);
-  }
-
-  const srcFile = path.join(inputPath, compFile);
-  const destFile = path.join(outputPath, compFile);
-
-  const raw = fs.readFileSync(srcFile, "utf8");
-  const content = YAML.parse(raw);
-  const mod = func(content);
-
-  fs.writeFileSync(destFile, YAML.stringify(mod, 10, 2), "utf8");
-}
-
-
-export const listen = async (params, cxt) => {
-
-
+export const clear = async (params, cxt) => {
   const {
-    operation: {
-      params: {
-        performers,
-        performer,
-        performer: {
-          type,
-          code: {
-            paths: {
-              absolute: {
-                folder
-              }
-            }
-          },
-          dependents,
-          module: {
-            dependencies
-          }
-        },
-        feature: {
-          featureid
+    performer: {
+      type,
+      code: {
+        paths: {
+          absolute: { folder }
         }
       }
     }
   } = params;
 
-  const deploymentTmpPath = path.join(folder, "tmp", "deployment.yaml");
-  const deploy = JsonUtils.load(deploymentTmpPath, true);
+  const handlers = {
+    onInfo: (info, { file }) => {
+      info && IO.sendOutput(info, cxt);
+    },
+    onRemoved: (info, { file }) => {
+      IO.sendOutput(info, cxt);
+      IO.sendEvent(
+        "warning",
+        {
+          data: file + " removed..."
+        },
+        cxt
+      );
+    },
+    onNotFound: ({ file }) => {
+      IO.sendEvent(
+        "warning",
+        {
+          data: file + " is not present..."
+        },
+        cxt
+      );
+    }
+  };
 
-  const igosut = await exec(["kubectl get pods --selector=app=" + deploy.metadata.name + " --namespace=" + deploy.metadata.namespace + " --template '{{range .items}}{{.metadata.name}}{{\"\\n\"}}{{end}}'"], {}, {}, cxt);
+  await Cluster.Control.remove(folder, "deployment.yaml", handlers, cxt);
+  await Cluster.Control.remove(folder, "service.yaml", handlers, cxt);
+};
 
-  const pods = igosut.stdout.trim().split("\n");
+const getLinkedServiceContainer = (performer, performers) => {
+  let servicePerf = null;
+  Performer.link(performer, performers, {
+    onLinked: depPerformer => {
+      if (
+        depPerformer.module.type === "container" &&
+        _.find(depPerformer.labels, lbl => lbl.startsWith("service:"))
+      ) {
+        servicePerf = depPerformer;
+      }
+    }
+  });
 
-  IO.sendEvent("out", {
-    data: "Pods " + igosut.stdout
-  }, cxt);
+  return servicePerf;
+};
 
-  for (const podid of pods) {
+const getLinkedServiceApp = (performer, performers) => {
+  let appPerf = null;
+  Performer.link(performer, performers, {
+    onLinked: depPerformer => {
+      if (depPerformer.module.type === "npm") {
+        appPerf = depPerformer;
+      }
+    }
+  });
 
-    IO.sendEvent("out", {
-      data: "Restarting pod " + podid
-    }, cxt);
+  return appPerf;
+};
 
-    await exec(["kubectl exec -i " + podid + " -c app --namespace=" + deploy.metadata.namespace + " -- /bin/sh -c \"echo echo date +%s%N > signal\" "], {}, {}, cxt);
+const updatePerformerDist = async (
+  { performerid, dependents },
+  params,
+  cxt
+) => {
+  const {
+    instanceid,
+    instanceFolder,
+    basePerformer,
+    recursive = false,
+    performers,
+    updated
+  } = params;
+
+  if (updated.includes(performerid)) {
+    return;
   }
 
-}
+  updated.push(performerid);
 
-export const start = (params, cxt) => {
+  IO.sendEvent(
+    "info",
+    {
+      data: "Update dependency " + performerid
+    },
+    cxt
+  );
 
+  const paths = await Cluster.Minikube.execToHost(
+    "find /home/docker/instances/" +
+      path.join(instanceid, "modules", basePerformer.performerid) +
+      " -type d -name " +
+      performerid,
+    cxt
+  );
+
+  const pathLines = paths.stdout.trim().split("\n");
+
+  /*IO.sendEvent(
+    "out",
+    {
+      data: "Host locations: " + JSON.stringify(pathLines, null, 2)
+    },
+    cxt
+  );*/
+
+  for (const line of pathLines) {
+    await Cluster.Minikube.copyToHost(
+      {
+        path: path.join(instanceFolder, "modules", performerid, "dist"),
+        type: "folder"
+      },
+      path.join(line, "dist"),
+      cxt
+    );
+  }
+
+  if (recursive) {
+    if (dependents.length > 0) {
+      IO.sendEvent(
+        "out",
+        {
+          data: "Update dependents " + JSON.stringify(dependents)
+        },
+        cxt
+      );
+    }
+
+    for (const depSrv of dependents) {
+      const depSrvPerformer = _.find(performers, {
+        performerid: depSrv.moduleid
+      });
+
+      /*IO.sendEvent(
+        "out",
+        {
+          data:
+            "DEPENDENT : " +
+            depSrv.moduleid +
+            "   " +
+            JSON.stringify(performers.map(({ performerid }) => performerid))
+        },
+        cxt
+      );*/
+
+      if (depSrvPerformer) {
+        if (depSrvPerformer.linked) {
+          await updatePerformerDist(depSrvPerformer, params, cxt);
+        }
+      }
+    }
+  }
+};
+
+const restartPodsApp = async (
+  triggerPerf,
+  { params, recursive, updated },
+  cxt
+) => {
   const {
     performers,
     performer,
@@ -92,250 +185,365 @@ export const start = (params, cxt) => {
       type,
       code: {
         paths: {
-          absolute: {
-            folder
-          }
+          absolute: { folder }
         }
       },
       dependents,
-      module: {
-        dependencies
-      }
+      module: { dependencies }
     },
-    feature: {
-      featureid
+    instance: {
+      instanceid,
+      paths: {
+        absolute: { folder: instanceFolder }
+      }
     }
   } = params;
 
-  if (type !== "instanced") {
-    throw new Error("PERFORMER_NOT_INSTANCED");
-  }
+  const tmpPath = path.join(folder, "tmp");
+  const deploymentTmpPath = path.join(tmpPath, "deployment.yaml");
+  const deploy = JsonUtils.load(deploymentTmpPath, true);
 
-  const watcher = async (operation, cxt) => {
+  const pods = await Cluster.Control.getDeploymentPods(
+    deploy.metadata.namespace,
+    deploy.metadata.name,
+    cxt
+  );
 
-    const {
-      operationid
-    } = operation;
+  IO.sendEvent(
+    "info",
+    {
+      data: "Pods " + pods
+    },
+    cxt
+  );
 
-    IO.sendEvent("out", {
-      data: "Setting service config..."
-    }, cxt);
+  let servicePerf = getLinkedServiceContainer(performer, performers);
 
-    const servicePath = path.join(folder, "dist", "service.yaml");
-    const serviceTmpPath = path.join(folder, "tmp", "service.yaml");
-
-    modify(folder, "service.yaml", content => {
-      content.metadata.namespace = featureid + "-" + content.metadata.namespace;
-      return content;
-    });
-
-    const nsout = await exec(["kubectl apply -f " + serviceTmpPath], {}, {}, cxt);
-
-    IO.sendEvent("out", {
-      data: nsout.stdout
-    }, cxt);
-
-    IO.sendEvent("out", {
-      data: "Setting deployment config..."
-    }, cxt);
-
-    const deploymentPath = path.join(folder, "dist", "deployment.yaml");
-    const deploymentTmpPath = path.join(folder, "tmp", "deployment.yaml");
-
-    modify(folder, "deployment.yaml", content => {
-
-      content.metadata.namespace = featureid + "-" + content.metadata.namespace;
-
-      for (const depSrv of dependents) {
-        const depSrvPerformer = _.find(performers, {
-          performerid: depSrv.moduleid
-        });
-
-        if (depSrvPerformer) {
-          IO.sendEvent("out", {
-            data: "Performing dependent found " + depSrv.moduleid
-          }, cxt);
-
-          if (depSrvPerformer.linked.includes("run")) {
-
-            IO.sendEvent("info", {
-              data: " - Linked " + depSrv.moduleid
-            }, cxt);
-
-            const serviceLabel = _.find(depSrvPerformer.labels, lbl => lbl.startsWith("service:"));
-
-            if (serviceLabel) {
-              const service = serviceLabel.split(":")[1];
-              IO.sendEvent("out", {
-                data: " - Service container " + service
-              }, cxt);
-
-
-              const currCont = _.find(content.spec.template.spec.containers, ({
-                name
-              }) => name === service);
-
-              if (currCont) {
-                const [imgName, imgVer] = currCont.image.split(":");
-                currCont.image = imgName + ":linked";
-
-                for (const perf of performers) {
-
-                  const {
-                    module: {
-                      moduleid,
-                      fullname,
-                      type
-                    },
-                    code: {
-                      paths: {
-                        absolute: {
-                          folder: featModuleFolder
-                        }
-                      }
-                    },
-                    linked
-                  } = perf;
-
-                  if (linked.includes("run") && type === "npm") {
-
-                    IO.sendEvent("info", {
-                      data: " - NPM linked " + perf.performerid
-                    }, cxt);
-
-                    content.spec.template.spec.volumes = [{
-                      name: moduleid,
-                      hostPath: {
-                        path: "/instance/modules/" + moduleid,
-                        type: "Directory"
-                      }
-                    }]
-
-                    content.spec.template.spec.containers = content.spec.template.spec.containers.map(cont => {
-
-                      cont.command = ["node"];
-                      cont.args = ["/app/node_modules/@nebulario/microservice-auth-graph/node_modules/nodemon/bin/nodemon.js", "-L", "--watch", "signal", "/app/node_modules/@nebulario/microservice-auth-graph/src/index.js"];
-
-                      cont.volumeMounts = [{
-                        name: moduleid,
-                        mountPath: "/app/node_modules/" + fullname
-                      }]
-
-                      return cont;
-                    })
-                  }
-                }
-
-              }
-
-            } else {
-              IO.sendEvent("warning", {
-                data: " - No service label"
-              }, cxt);
-            }
-          } else {
-            IO.sendEvent("warning", {
-              data: " - Not linked " + depSrv.moduleid
-            }, cxt);
-          }
-
-
-        }
-
-        /*
-
-
-
-        if (appPerformer.linked.includes("run")) {
-          IO.sendEvent("info", {
-            data: " - App linked " + appPerformer.performerid
-          }, cxt);
-
-          const {
-            module: {
-              fullname
-            },
-            code: {
-              paths: {
-                absolute: {
-                  folder: featModuleFolder
-                }
-              }
-            }
-          } = appPerformer;
-
-          const entry = featModuleFolder + ":/app/node_modules/" + fullname;
-          if (!currServ.volumes) {
-            currServ.volumes = [];
-          }
-          currServ.volumes.push(entry);
-
-
-        } else {
-          IO.sendEvent("warning", {
-            data: " - App not linked " + appPerformer.performerid
-          }, cxt);
-        }
-
-        */
-
-        /*const {
-          metadata: {
-            service
-          }
-        } = depSrv;
-        const appMod = _.find(modules, {
-          moduleid: depSrv.moduleid
-        });
-
-        if (appMod) {
-          dependentLink(compose.services['app'], modules, appMod);
-        }*/
-      }
-
-
-      /*content.spec.template.spec.volumes = [{
-        name: "app",
-        hostPath: {
-          path: "/instance/modules/microservice-auth-graph",
-          type: "Directory"
-        }
-
-      }]
-
-      content.spec.template.spec.containers = content.spec.template.spec.containers.map(cont => {
-
-        cont.volumeMounts = [{
-          name: "app",
-          mountPath: "/app/node_modules/@nebulario/microservice-auth-graph"
-        }]
-
-        return cont;
-      })*/
-      return content;
-    });
-
-
-
-    const igosut = await exec(["kubectl apply -f " + deploymentTmpPath], {}, {}, cxt);
-
-    IO.sendEvent("out", {
-      data: igosut.stdout
-    }, cxt);
-
-    while (operation.status !== "stopping") {
-      await wait(2500);
+  if (servicePerf) {
+    if (triggerPerf) {
+      await updatePerformerDist(
+        triggerPerf,
+        {
+          instanceFolder,
+          recursive,
+          basePerformer: servicePerf,
+          performers,
+          instanceid,
+          updated
+        },
+        cxt
+      );
     }
 
-    IO.sendEvent("stopped", {
-      operationid,
-      data: "Stopping service config..."
-    }, cxt);
-  }
+    for (const podid of pods) {
+      const cmdid = uuidv4();
 
+      IO.sendEvent(
+        "out",
+        {
+          data: "Restarting inner container app " + podid
+        },
+        cxt
+      );
+
+      await Cluster.Control.execToPod(
+        deploy.metadata.namespace,
+        podid,
+        'echo "cmd:restart:' + cmdid + '" > /tmp/agent-input',
+        cxt
+      );
+    }
+  }
+};
+
+export const listen = async (params, cxt) => {
+  const {
+    performerid, // TRIGGER DEP
+    operation: {
+      params: opParams,
+      params: {
+        performer: { type },
+        performers
+      }
+    }
+  } = params;
+
+  if (type === "instanced") {
+    const triggerPerf = Performer.find(performerid, performers);
+
+    if (triggerPerf && triggerPerf.module.type === "npm") {
+      await restartPodsApp(
+        triggerPerf,
+        { params: opParams, recursive: false, updated: [] },
+        cxt
+      );
+    }
+  }
+};
+
+export const init = async (params, cxt) => {
+  const {
+    performers,
+    performer,
+    performer: {
+      dependents,
+      type,
+      code: {
+        paths: {
+          absolute: { folder }
+        }
+      }
+    },
+    instance: {
+      instanceid,
+      paths: {
+        absolute: { folder: instanceFolder }
+      }
+    }
+  } = params;
+
+  if (type === "instanced") {
+    let servicePerf = getLinkedServiceContainer(performer, performers);
+
+    if (servicePerf) {
+      IO.sendEvent(
+        "info",
+        {
+          data: "Initialize instance module... " + servicePerf.module.moduleid
+        },
+        cxt
+      );
+
+      await Cluster.Minikube.copyToHost(
+        {
+          path: path.join(
+            instanceFolder,
+            "modules",
+            servicePerf.module.moduleid
+          ),
+          type: "folder"
+        },
+        "/home/docker/instances/" +
+          instanceid +
+          "/modules/" +
+          servicePerf.module.moduleid,
+        cxt
+      );
+    }
+  }
+};
+
+export const start = (params, cxt) => {
+  const {
+    init,
+    performers,
+    performer,
+    performer: {
+      type,
+      code: {
+        paths: {
+          absolute: { folder }
+        }
+      },
+      dependents,
+      module: { dependencies }
+    },
+    instance: { instanceid },
+    plugins
+  } = params;
+
+  const tmpPath = path.join(folder, "tmp");
+  const distPath = path.join(folder, "dist");
+
+  const startOp = async (operation, cxt) => {
+    let depSrvAppPerformer = null;
+    IO.sendEvent(
+      "out",
+      {
+        data: "Setting service config..."
+      },
+      cxt
+    );
+
+    const serviceDevPath = await Cluster.Dev.transform(
+      "service.yaml",
+      distPath,
+      tmpPath,
+      async content => {
+        content.metadata.namespace =
+          instanceid + "-" + content.metadata.namespace;
+        return content;
+      }
+    );
+
+    const srvout = await Cluster.Control.apply(serviceDevPath, cxt);
+    IO.sendOutput(srvout, cxt);
+    IO.sendEvent(
+      "out",
+      {
+        data: "Setting deployment config..."
+      },
+      cxt
+    );
+
+    await Cluster.Dev.transform(
+      "deployment.yaml",
+      distPath,
+      tmpPath,
+      async (content, raw) => {
+        const namespace = Cluster.Dev.get(raw, /namespace: (.+)/g);
+        const host = Cluster.Dev.get(raw, /\s*name: HOST\s*value: (.+)/g);
+
+        IO.sendEvent(
+          "out",
+          {
+            data: "Setting deployment config..." + namespace + "  ---  " + host
+          },
+          cxt
+        );
+
+        let nraw = namespace
+          ? Cluster.Dev.replace(raw, namespace, instanceid + "-" + namespace)
+          : raw;
+        nraw = host
+          ? Cluster.Dev.replace(nraw, host, instanceid + "-" + host)
+          : nraw;
+        return nraw;
+      }
+    );
+
+    const deploymentDevPath = await Cluster.Dev.transform(
+      "deployment.yaml",
+      tmpPath,
+      tmpPath,
+      async content => {
+        content.spec.template.spec.volumes =
+          content.spec.template.spec.volumes || [];
+
+        let servicePerf = getLinkedServiceContainer(performer, performers);
+
+        if (servicePerf) {
+          const service = "app";
+          IO.sendEvent(
+            "out",
+            {
+              data: " - Service container " + service
+            },
+            cxt
+          );
+
+          const currCont = _.find(
+            content.spec.template.spec.containers,
+            ({ name }) => name === service
+          );
+
+          if (currCont) {
+            const [imgName, imgVer] = currCont.image.split(":");
+            currCont.image = imgName + ":linked";
+
+            depSrvAppPerformer = getLinkedServiceApp(servicePerf, performers);
+
+            if (depSrvAppPerformer) {
+              IO.sendEvent(
+                "info",
+                {
+                  data: " - Linked " + depSrvAppPerformer.performerid
+                },
+                cxt
+              );
+
+              const agent = _.find(
+                plugins,
+                ({ pluginid }) => pluginid === "agent:npm"
+              );
+
+              if (agent) {
+                const appFullname = depSrvAppPerformer.module.fullname;
+
+                currCont.command = ["sh"];
+                currCont.args = [
+                  "/agent/src/index.sh",
+                  Buffer.from(
+                    JSON.stringify({
+                      ...params,
+                      deployment: {
+                        container: servicePerf,
+                        app: depSrvAppPerformer
+                      }
+                    })
+                  ).toString("base64")
+                ];
+
+                currCont.volumeMounts = currCont.volumeMounts || [];
+                currCont.volumeMounts = [
+                  {
+                    name: "agent",
+                    mountPath: "/agent"
+                  },
+                  {
+                    name: "app",
+                    mountPath: "/app"
+                  },
+                  ...currCont.volumeMounts
+                ];
+
+                content.spec.template.spec.volumes = [
+                  {
+                    name: "agent",
+                    hostPath: {
+                      path: "/home/docker/agent/" + instanceid + "/npm",
+                      type: "Directory"
+                    }
+                  },
+                  {
+                    name: "app",
+                    hostPath: {
+                      path:
+                        "/home/docker/instances/" +
+                        instanceid +
+                        "/modules/" +
+                        servicePerf.module.moduleid,
+                      type: "Directory"
+                    }
+                  },
+                  ...content.spec.template.spec.volumes
+                ];
+              }
+            }
+          }
+        }
+        return content;
+      }
+    );
+
+    const igosut = await Cluster.Control.apply(deploymentDevPath, cxt);
+    IO.sendOutput(igosut, cxt);
+
+    IO.sendEvent(
+      "info",
+      {
+        data: "Service & deployment up to date..."
+      },
+      cxt
+    );
+
+    if (depSrvAppPerformer) {
+      await restartPodsApp(
+        depSrvAppPerformer,
+        { params, recursive: true, updated: [] },
+        cxt
+      );
+    }
+
+    IO.sendEvent("done", {}, cxt);
+
+    while (operation.status !== "stopping") {
+      await wait(100);
+    }
+  };
 
   return {
-    promise: watcher,
+    promise: startOp,
     process: null
   };
-}
+};
